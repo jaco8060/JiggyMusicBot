@@ -12,6 +12,7 @@ ffmpeg-python = "0.2.0"
 python-dotenv = "^1.0.1"
 yt-dlp = "^2024.8.6"
 flask = "^3.0.3"
+pynacl = "^1.4.0" 
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
