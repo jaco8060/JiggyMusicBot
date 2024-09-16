@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: JiggyMusicBot
+    env: python
+    plan: free
+    buildCommand: "poetry install"
+    startCommand: "poetry run python main.py"
+    envVars:
+      - key: DISCORD_BOT_TOKEN
+        sync: false
