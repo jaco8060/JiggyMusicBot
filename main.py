@@ -3,6 +3,8 @@ from discord.ext import commands
 import yt_dlp as youtube_dl
 import os
 from dotenv import load_dotenv
+from flask import Flask
+from threading import Thread
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -60,7 +62,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
             data = data['entries'][0]
 
         filename = data['url']
-        return cls(discord.FFmpegPCMAudio(executable="ffmpeg",  # Assuming FFmpeg is globally available
+        return cls(discord.FFmpegPCMAudio(executable="./ffmpeg",
                                           source=filename,
                                           **ffmpeg_options),
                    data=data)
@@ -73,29 +75,19 @@ async def play(interaction: discord.Interaction, url: str):
             f"{interaction.user.mention}, you need to be in a voice channel to use this command.",
             ephemeral=True)
         return
-    
-    await interaction.response.defer()  # Defer the interaction in case the command takes time
-    
+
     channel = interaction.user.voice.channel
     voice_client = interaction.guild.voice_client
 
     # If the bot is not connected to a voice channel, connect
     if not voice_client:
-        try:
-            voice_client = await channel.connect()
-        except Exception as e:
-            await interaction.followup.send(f"Failed to connect to the voice channel: {e}")
-            return
+        voice_client = await channel.connect()
 
     async with interaction.channel.typing():
-        try:
-            player = await YTDLSource.from_url(url, loop=bot.loop)
-            voice_client.play(player, after=lambda e: print(f"Player error: {e}") if e else None)
-        except Exception as e:
-            await interaction.followup.send(f"Error processing the request: {e}")
-            return
+        player = await YTDLSource.from_url(url, loop=bot.loop)
+        voice_client.play(player, after=lambda e: print(f"Player error: {e}") if e else None)
 
-    await interaction.followup.send(f'Now playing: {player.title}')
+    await interaction.response.send_message(f'Now playing: {player.title}')
 
 # Define a /stop command
 @tree.command(name="stop", description="Stop the audio and disconnect the bot")
@@ -104,9 +96,6 @@ async def stop(interaction: discord.Interaction):
         await interaction.guild.voice_client.disconnect()
         await interaction.response.send_message(
             "Stopped playing and left the voice channel.")
-    else:
-        await interaction.response.send_message(
-            "The bot is not connected to any voice channel.", ephemeral=True)
 
 # Sync slash commands when the bot is ready
 @bot.event
@@ -114,13 +103,22 @@ async def on_ready():
     await tree.sync()
     print(f"Logged in as {bot.user} and ready!")
 
-# Error handler for command errors
-@bot.event
-async def on_command_error(ctx, error):
-    if isinstance(error, commands.CommandInvokeError):
-        await ctx.send(f"Command failed: {error}")
-    else:
-        raise error
+# Flask app for Render to keep the bot alive
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "JiggyMusicBot is running!"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+# Keep the bot alive by running the Flask server
+keep_alive()
 
 # Run the bot using the token from the .env file
 token = os.getenv('DISCORD_BOT_TOKEN')
