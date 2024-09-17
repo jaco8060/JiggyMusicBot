@@ -17,7 +17,7 @@ This bot allows you to play music, upload audio files, and manage music queues i
 ### Step 3: Invite the Bot to Your Server
 
 To add the bot to your Discord server, use the following URL:
-https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot&permissions=8
+https://discord.com/oauth2/authorize?client_id=1284369572476223511&permissions=3221504&integration_type=0&scope=applications.commands+bot 
 
 ### Step 4: Use the Commands
 
