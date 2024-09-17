@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from discord.ui import Button, View
 from keep_alive import keep_alive  # Import the keep-alive script
 import html  # Import the html module for unescaping
-from keep_alive import keep_alive  # Import the keep-alive script
+import shutil  # To manage file operations
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -29,23 +29,24 @@ bot = commands.Bot(command_prefix='/', intents=intents)
 # Use the existing command tree of the bot
 tree = bot.tree
 
-# Folder to store audio files
+# Folder to store audio files and cookies
 AUDIO_FOLDER = "audio_files"
+COOKIES_FOLDER = "cookies"
 
-# Ensure the audio folder exists
+# Ensure the audio folder and cookies folder exist
 if not os.path.exists(AUDIO_FOLDER):
     os.makedirs(AUDIO_FOLDER)
 
+if not os.path.exists(COOKIES_FOLDER):
+    os.makedirs(COOKIES_FOLDER)
 
-# Function to clean up the folder at startup
+# Function to clean up the folder at startup while keeping .gitkeep
 def cleanup_audio_folder():
     for file_name in os.listdir(AUDIO_FOLDER):
         file_path = os.path.join(AUDIO_FOLDER, file_name)
         try:
-            # Skip the .gitkeep file
-            if file_name == '.gitkeep':
-                continue
-            if os.path.isfile(file_path):
+            # Skip deleting .gitkeep file
+            if file_name != '.gitkeep' and os.path.isfile(file_path):
                 os.remove(file_path)
                 print(f"Deleted file: {file_path}")
         except Exception as e:
@@ -58,7 +59,10 @@ cleanup_audio_folder()
 # Global song queue
 song_queue = []
 
-# yt-dlp options
+# List to track files that need to be deleted after playing or skipping
+files_to_delete = []
+
+# yt-dlp options with cookie file handling
 ytdl_format_options = {
     'format': 'bestaudio/best',
     'outtmpl': f'{AUDIO_FOLDER}/%(extractor)s-%(id)s-%(title)s.%(ext)s',
@@ -70,21 +74,19 @@ ytdl_format_options = {
     'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
-    'source_address': '0.0.0.0'
+    'source_address': '0.0.0.0',
+    'cookiefile': f'{COOKIES_FOLDER}/cookies.txt'  # Use the cookies file
 }
 
 ffmpeg_options = {
-    'before_options':
-    '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
     'options': '-vn'
 }
 
 ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 
-
 # Define YTDLSource class to handle audio playback from YouTube
 class YTDLSource(discord.PCMVolumeTransformer):
-
     def __init__(self, source, *, data, volume=0.5):
         super().__init__(source, volume)
         self.data = data
@@ -94,17 +96,55 @@ class YTDLSource(discord.PCMVolumeTransformer):
     @classmethod
     async def from_url(cls, url, *, loop=None):
         loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(
-            None, lambda: ytdl.extract_info(url, download=False))
+        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=False))
 
         if 'entries' in data:
             data = data['entries'][0]
 
         filename = data['url']
-        return cls(discord.FFmpegPCMAudio(executable="./ffmpeg",
-                                          source=filename,
-                                          **ffmpeg_options),
-                   data=data)
+        return cls(discord.FFmpegPCMAudio(executable="./ffmpeg", source=filename, **ffmpeg_options), data=data)
+
+# Command to refresh cookies by uploading a new file
+@tree.command(name="refresh_cookies", description="Upload a cookies.txt file for YouTube authentication")
+async def refresh_cookies(interaction: discord.Interaction):
+    # Prompt the user to upload the cookies.txt file
+    await interaction.response.send_message(f"{interaction.user.mention}, please upload the cookies.txt file in Netscape format.", ephemeral=True)
+
+    # Define a check for the file upload (same as used in upload_play)
+    def check(message):
+        return message.author == interaction.user and message.attachments and message.attachments[0].filename.endswith('.txt')
+
+    try:
+        # Wait for the user to upload the file
+        message = await bot.wait_for('message', check=check, timeout=60.0)
+        cookies_file = message.attachments[0]
+
+        # Save the uploaded cookie file to the cookies folder
+        cookies_path = f'{COOKIES_FOLDER}/{cookies_file.filename}'
+        await cookies_file.save(cookies_path)
+
+        # Ensure the file is in the correct Netscape format
+        with open(cookies_path, 'r') as f:
+            first_line = f.readline().strip()
+            if first_line != '# Netscape HTTP Cookie File':
+                await interaction.followup.send(f"Invalid cookies format. The file must be in Netscape format.", ephemeral=True)
+                return
+
+        # Move the file to overwrite the existing cookies.txt
+        shutil.move(cookies_path, f'{COOKIES_FOLDER}/cookies.txt')
+
+        # Update yt-dlp options with the new cookie file
+        ytdl.params.update({'cookiefile': f'{COOKIES_FOLDER}/cookies.txt'})
+
+        # Send a success message to the user
+        await interaction.followup.send(f"Cookies file `{cookies_file.filename}` uploaded and set successfully!", ephemeral=True)
+
+        # Delete the Discord message for privacy
+        await message.delete()
+
+    except asyncio.TimeoutError:
+        await interaction.followup.send(f"{interaction.user.mention}, you took too long to upload the file.", ephemeral=True)
+
 
 
 # Search using YouTube Data API
@@ -155,10 +195,14 @@ async def search_youtube(query):
     return videos
 
 
-# Play the next song
+# Play the next song and add files to the deletion list
 async def play_next_song(voice_client):
     if song_queue:
         next_song = song_queue.pop(0)
+
+        # If the next song is a file, add it to the list for deletion later
+        if next_song['type'] == 'file':
+            files_to_delete.append(next_song['path'])
 
         if next_song['type'] == 'file':
             player = discord.FFmpegPCMAudio(next_song['path'])
@@ -166,19 +210,20 @@ async def play_next_song(voice_client):
             player = await YTDLSource.from_url(next_song['url'], loop=bot.loop)
 
         def after_playing(e):
+            # Delete the file after playing, if applicable
             if next_song['type'] == 'file':
                 try:
                     os.remove(next_song['path'])
+                    print(f"Deleted file: {next_song['path']}")
                 except Exception as err:
-                    print(f"Error deleting file: {err}")
-            asyncio.run_coroutine_threadsafe(play_next_song(voice_client),
-                                             bot.loop)
+                    print(f"Error deleting file {next_song['path']}: {err}")
+
+            asyncio.run_coroutine_threadsafe(play_next_song(voice_client), bot.loop)
 
         voice_client.play(player, after=after_playing)
     else:
         await voice_client.disconnect()
         song_queue.clear()
-
 
 # Class for video selection
 class VideoSelectionView(View):
@@ -302,6 +347,9 @@ async def upload_play(interaction: discord.Interaction):
         audio_file_path = os.path.join(AUDIO_FOLDER, audio_file.filename)
         await audio_file.save(audio_file_path)
 
+        # Add the file to the list of files to be deleted later
+        files_to_delete.append(audio_file_path)
+
         # Delete the Discord message that contained the uploaded file
         await message.delete()
 
@@ -336,45 +384,66 @@ async def upload_play(interaction: discord.Interaction):
             "You took too long to upload an audio file.", ephemeral=True)
 
 
-# Define a /skip command to skip the current song
+
+# Define a /skip command to skip the current song and manage file deletion
 @tree.command(
     name="skip",
     description="Skip the current song and play the next one in the queue")
 async def skip(interaction: discord.Interaction):
+    global files_to_delete
     voice_client = interaction.guild.voice_client
+
     if voice_client and voice_client.is_playing():
+        # Stop the current song
         voice_client.stop()
         await interaction.response.send_message("Skipped the current song.")
+
+        # If there are files to delete, delete the first one
+        if files_to_delete:
+            file_to_delete = files_to_delete.pop(0)
+            try:
+                os.remove(file_to_delete)
+                print(f"Deleted file: {file_to_delete}")
+            except Exception as e:
+                print(f"Error deleting file {file_to_delete}: {e}")
     else:
         await interaction.response.send_message(
             "No song is currently playing.", ephemeral=True)
 
 
-# Define a /stop command to stop playback and disconnect the bot
+# Stop command to stop playback, disconnect, and clean up files
 @tree.command(name="stop", description="Stop the audio and disconnect the bot")
 async def stop(interaction: discord.Interaction):
+    global files_to_delete
     voice_client = interaction.guild.voice_client
+
     if voice_client:
-        # Acknowledge the interaction first to avoid timeout
-        await interaction.response.send_message(
-            "Stopping playback and disconnecting the bot.")
+        await interaction.response.send_message("Stopping playback and disconnecting the bot.")
 
-        # Disconnect the bot and clear the queue
+        # Stop playback and disconnect the bot after stopping
+        voice_client.stop() 
+
+        # Disconnect the bot
         await voice_client.disconnect()
+
+        # Now delete all remaining files in the deletion list after bot has disconnected
+        while files_to_delete:
+            file_to_delete = files_to_delete.pop(0)
+            try:
+                if os.path.exists(file_to_delete):
+                    os.remove(file_to_delete)
+                else:
+                    print(f"File {file_to_delete} already deleted, skipping...")
+
+            except Exception as e:
+                print(f"Error deleting file {file_to_delete}: {e}")
+
+        # Clear the song queue and file deletion list
         song_queue.clear()
+        files_to_delete.clear()
 
-        # Delete any remaining audio files
-        for song in song_queue:
-            if song['type'] == 'file':
-                try:
-                    os.remove(song['path'])
-                    print(f"Deleted file: {song['path']}")
-                except Exception as delete_error:
-                    print(f"Error deleting file: {delete_error}")
     else:
-        await interaction.response.send_message(
-            "I'm not connected to a voice channel.", ephemeral=True)
-
+        await interaction.response.send_message("I'm not connected to a voice channel.", ephemeral=True)
 
 # Define a /queue command to list the current song queue
 @tree.command(name="queue", description="List the current song queue")
