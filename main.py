@@ -81,8 +81,9 @@ ytdl_format_options = {
 
 ffmpeg_options = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn'
+    'options': '-vn -loglevel debug'  # Add '-loglevel debug' for more details
 }
+
 
 # yt-dlp instance with OAuth2 options
 ytdl = youtube_dl.YoutubeDL(ytdl_format_options)

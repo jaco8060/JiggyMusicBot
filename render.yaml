@@ -4,8 +4,8 @@ services:
     env: python
     plan: free
     buildCommand: |
-      apt-get update && apt-get install -y ffmpeg
-      poetry install
+      chmod +x ffmpeg  # Set FFmpeg as executable
+      poetry install   # Install your Python dependencies
     startCommand: "poetry run python main.py"
     envVars:
       - key: DISCORD_BOT_TOKEN
