@@ -10,6 +10,10 @@ from discord.ui import Button, View
 from keep_alive import keep_alive  # Import the keep-alive script
 import html  # Import the html module for unescaping
 import shutil  # To manage file operations
+import logging
+import re
+
+logging.basicConfig(level=logging.INFO)
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -29,16 +33,12 @@ bot = commands.Bot(command_prefix='/', intents=intents)
 # Use the existing command tree of the bot
 tree = bot.tree
 
-# Folder to store audio files and cookies
+# Folder to store audio files
 AUDIO_FOLDER = "audio_files"
-COOKIES_FOLDER = "cookies"
 
-# Ensure the audio folder and cookies folder exist
+# Ensure the audio folder exists
 if not os.path.exists(AUDIO_FOLDER):
     os.makedirs(AUDIO_FOLDER)
-
-if not os.path.exists(COOKIES_FOLDER):
-    os.makedirs(COOKIES_FOLDER)
 
 # Function to clean up the folder at startup while keeping .gitkeep
 def cleanup_audio_folder():
@@ -52,7 +52,6 @@ def cleanup_audio_folder():
         except Exception as e:
             print(f"Error deleting file {file_path}: {e}")
 
-
 # Clean up audio folder at the start
 cleanup_audio_folder()
 
@@ -62,7 +61,7 @@ song_queue = []
 # List to track files that need to be deleted after playing or skipping
 files_to_delete = []
 
-# yt-dlp options with cookie file handling
+# yt-dlp options using OAuth2 for authentication
 ytdl_format_options = {
     'format': 'bestaudio/best',
     'outtmpl': f'{AUDIO_FOLDER}/%(extractor)s-%(id)s-%(title)s.%(ext)s',
@@ -71,11 +70,13 @@ ytdl_format_options = {
     'nocheckcertificate': True,
     'ignoreerrors': False,
     'logtostderr': False,
-    'quiet': True,
+    'quiet': False,
+    'verbose': True,
     'no_warnings': True,
     'default_search': 'auto',
     'source_address': '0.0.0.0',
-    'cookiefile': f'{COOKIES_FOLDER}/cookies.txt'  # Use the cookies file
+    'username': 'oauth2',  # OAuth2 setup
+    'password': '',  # Required by the OAuth2 plugin
 }
 
 ffmpeg_options = {
@@ -83,7 +84,45 @@ ffmpeg_options = {
     'options': '-vn'
 }
 
+# yt-dlp instance with OAuth2 options
 ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
+
+@tree.command(name="oauth_login", description="Login to YouTube using OAuth2")
+async def oauth_login(interaction: discord.Interaction):
+    """Initiates the OAuth2 login flow for YouTube."""
+    try:
+        logging.info(f"Received command /oauth_login from {interaction.user}")
+
+        # Defer the response since the process takes some time
+        await interaction.response.defer(ephemeral=True)
+
+        logging.info("Starting OAuth login process...")
+        
+        # Run yt-dlp in a separate thread to avoid blocking the bot
+        def run_ytdlp():
+            return ytdl.extract_info('https://www.youtube.com/', download=False)
+
+        response = await bot.loop.run_in_executor(None, run_ytdlp)
+        
+        # Look for the device code in yt-dlp's output using regex
+        device_code_match = re.search(r"enter code\s+(\S+)", str(response))
+        if device_code_match:
+            device_code = device_code_match.group(1)
+            logging.info(f"Found device code: {device_code}")
+
+            # Send the device code to the Discord user
+            await interaction.followup.send(
+                f"To authorize the bot to use your YouTube account, visit the following URL and enter the code **{device_code}**:\n"
+                "https://www.google.com/device"
+            )
+        else:
+            # Handle case where device code wasn't found
+            await interaction.followup.send("Could not retrieve the device code. Please try again.", ephemeral=True)
+
+    except Exception as e:
+        logging.error(f"Error during OAuth process: {e}")
+        await interaction.followup.send("There was an error starting the OAuth login process. Please try again.", ephemeral=True)
+
 
 # Define YTDLSource class to handle audio playback from YouTube
 class YTDLSource(discord.PCMVolumeTransformer):
@@ -103,49 +142,6 @@ class YTDLSource(discord.PCMVolumeTransformer):
 
         filename = data['url']
         return cls(discord.FFmpegPCMAudio(executable="./ffmpeg", source=filename, **ffmpeg_options), data=data)
-
-# Command to refresh cookies by uploading a new file
-@tree.command(name="refresh_cookies", description="Upload a cookies.txt file for YouTube authentication")
-async def refresh_cookies(interaction: discord.Interaction):
-    # Prompt the user to upload the cookies.txt file
-    await interaction.response.send_message(f"{interaction.user.mention}, please upload the cookies.txt file in Netscape format.", ephemeral=True)
-
-    # Define a check for the file upload (same as used in upload_play)
-    def check(message):
-        return message.author == interaction.user and message.attachments and message.attachments[0].filename.endswith('.txt')
-
-    try:
-        # Wait for the user to upload the file
-        message = await bot.wait_for('message', check=check, timeout=60.0)
-        cookies_file = message.attachments[0]
-
-        # Save the uploaded cookie file to the cookies folder
-        cookies_path = f'{COOKIES_FOLDER}/{cookies_file.filename}'
-        await cookies_file.save(cookies_path)
-
-        # Ensure the file is in the correct Netscape format
-        with open(cookies_path, 'r') as f:
-            first_line = f.readline().strip()
-            if first_line != '# Netscape HTTP Cookie File':
-                await interaction.followup.send(f"Invalid cookies format. The file must be in Netscape format.", ephemeral=True)
-                return
-
-        # Move the file to overwrite the existing cookies.txt
-        shutil.move(cookies_path, f'{COOKIES_FOLDER}/cookies.txt')
-
-        # Update yt-dlp options with the new cookie file
-        ytdl.params.update({'cookiefile': f'{COOKIES_FOLDER}/cookies.txt'})
-
-        # Send a success message to the user
-        await interaction.followup.send(f"Cookies file `{cookies_file.filename}` uploaded and set successfully!", ephemeral=True)
-
-        # Delete the Discord message for privacy
-        await message.delete()
-
-    except asyncio.TimeoutError:
-        await interaction.followup.send(f"{interaction.user.mention}, you took too long to upload the file.", ephemeral=True)
-
-
 
 # Search using YouTube Data API
 async def youtube_api_search(query):
@@ -174,7 +170,6 @@ async def youtube_api_search(query):
         print(f"API error: {e}")
         return None
 
-
 # Fallback to yt-dlp search
 async def yt_dlp_search(query):
     loop = asyncio.get_event_loop()
@@ -185,7 +180,6 @@ async def yt_dlp_search(query):
         'title': entry['title']
     } for entry in data.get('entries', [])]
 
-
 # Check API usage and fallback to yt-dlp if limit is hit
 async def search_youtube(query):
     videos = await youtube_api_search(query)
@@ -193,7 +187,6 @@ async def search_youtube(query):
         print("YouTube API failed, falling back to yt-dlp.")
         videos = await yt_dlp_search(query)
     return videos
-
 
 # Play the next song and add files to the deletion list
 async def play_next_song(voice_client):
@@ -224,6 +217,8 @@ async def play_next_song(voice_client):
     else:
         await voice_client.disconnect()
         song_queue.clear()
+
+
 
 # Class for video selection
 class VideoSelectionView(View):
