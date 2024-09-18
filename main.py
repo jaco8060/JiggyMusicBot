@@ -455,6 +455,20 @@ async def queue(interaction: discord.Interaction):
         await interaction.response.send_message(
             f"Current song queue:\n\n{queue_list}")
 
+@tree.command(name="test_local_audio", description="Test playing a local audio file")
+async def test_local_audio(interaction: discord.Interaction):
+    if not interaction.user.voice:
+        await interaction.response.send_message("You need to be in a voice channel.", ephemeral=True)
+        return
+
+    # Connect to the voice channel
+    voice_client = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
+
+    # Test with a local audio file
+    player = discord.FFmpegPCMAudio(executable="./ffmpeg", source="test_audio.mp3")  # Replace with your local test file path
+    voice_client.play(player)
+
+    await interaction.response.send_message("Started playing test audio!")
 
 # Sync slash commands when the bot is ready
 @bot.event
