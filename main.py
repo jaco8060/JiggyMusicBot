@@ -141,7 +141,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
             data = data['entries'][0]
 
         filename = data['url']
-        return cls(discord.FFmpegPCMAudio(executable="./ffmpeg", source=filename, **ffmpeg_options), data=data)
+        return cls(discord.FFmpegPCMAudio(executable="./ffmpeg.exe", source=filename, **ffmpeg_options), data=data)
 
 # Search using YouTube Data API
 async def youtube_api_search(query):
