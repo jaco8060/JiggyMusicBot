@@ -9,22 +9,10 @@ from dotenv import load_dotenv
 from discord.ui import Button, View
 from keep_alive import keep_alive  # Import the keep-alive script
 import html  # Import the html module for unescaping
-import shutil  # To manage file operations
-import logging
-import re
-
-logging.basicConfig(level=logging.INFO)
+from keep_alive import keep_alive  # Import the keep-alive script
 
 # Load environment variables from the .env file
 load_dotenv()
-
-# Set up the YT_DLP_CACHE_DIR environment variable
-# This will ensure the token cache is stored in the specified directory
-os.environ['YT_DLP_CACHE_DIR'] = './token_cache'  # Path to token cache folder in your project
-
-# Ensure the cache directory exists
-if not os.path.exists('./token_cache'):
-    os.makedirs('./token_cache')
 
 # Initialize Flask web server to keep the bot alive
 keep_alive()
@@ -48,17 +36,21 @@ AUDIO_FOLDER = "audio_files"
 if not os.path.exists(AUDIO_FOLDER):
     os.makedirs(AUDIO_FOLDER)
 
-# Function to clean up the folder at startup while keeping .gitkeep
+
+# Function to clean up the folder at startup
 def cleanup_audio_folder():
     for file_name in os.listdir(AUDIO_FOLDER):
         file_path = os.path.join(AUDIO_FOLDER, file_name)
         try:
-            # Skip deleting .gitkeep file
-            if file_name != '.gitkeep' and os.path.isfile(file_path):
+            # Skip the .gitkeep file
+            if file_name == '.gitkeep':
+                continue
+            if os.path.isfile(file_path):
                 os.remove(file_path)
                 print(f"Deleted file: {file_path}")
         except Exception as e:
             print(f"Error deleting file {file_path}: {e}")
+
 
 # Clean up audio folder at the start
 cleanup_audio_folder()
@@ -66,77 +58,33 @@ cleanup_audio_folder()
 # Global song queue
 song_queue = []
 
-# List to track files that need to be deleted after playing or skipping
-files_to_delete = []
-
-# yt-dlp options using OAuth2 for authentication
+# yt-dlp options
 ytdl_format_options = {
-    'format': 'bestaudio[ext=m4a]', 
-    'outtmpl': f'{AUDIO_FOLDER}/%(extractor)s-%(`id)s-%(title)s.%(ext)s',
+    'format': 'bestaudio/best',
+    'outtmpl': f'{AUDIO_FOLDER}/%(extractor)s-%(id)s-%(title)s.%(ext)s',
     'restrictfilenames': True,
     'noplaylist': True,
     'nocheckcertificate': True,
     'ignoreerrors': False,
     'logtostderr': False,
-    'quiet': False,
-    'verbose': True,
+    'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
-    'source_address': '0.0.0.0',
-    'username': 'oauth2',  # OAuth2 setup
-    'password': '',  # Required by the OAuth2 plugin
-    'cache-dir': './token_cache',  # Specify cache directory using --cache-dir
+    'source_address': '0.0.0.0'
 }
 
 ffmpeg_options = {
-    'before_options': '-re -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn -loglevel debug'
+    'before_options':
+    '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+    'options': '-vn'
 }
 
-
-
-# yt-dlp instance with OAuth2 options
 ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
-
-@tree.command(name="oauth_login", description="Login to YouTube using OAuth2")
-async def oauth_login(interaction: discord.Interaction):
-    """Initiates the OAuth2 login flow for YouTube."""
-    try:
-        logging.info(f"Received command /oauth_login from {interaction.user}")
-
-        # Defer the response since the process takes some time
-        await interaction.response.defer(ephemeral=True)
-
-        logging.info("Starting OAuth login process...")
-        
-        # Run yt-dlp in a separate thread to avoid blocking the bot
-        def run_ytdlp():
-            return ytdl.extract_info('https://www.youtube.com/', download=False)
-
-        response = await bot.loop.run_in_executor(None, run_ytdlp)
-        
-        # Look for the device code in yt-dlp's output using regex
-        device_code_match = re.search(r"enter code\s+(\S+)", str(response))
-        if device_code_match:
-            device_code = device_code_match.group(1)
-            logging.info(f"Found device code: {device_code}")
-
-            # Send the device code to the Discord user
-            await interaction.followup.send(
-                f"To authorize the bot to use your YouTube account, visit the following URL and enter the code **{device_code}**:\n"
-                "https://www.google.com/device"
-            )
-        else:
-            # Handle case where device code wasn't found
-            await interaction.followup.send("Could not retrieve the device code. Please try again.", ephemeral=True)
-
-    except Exception as e:
-        logging.error(f"Error during OAuth process: {e}")
-        await interaction.followup.send("There was an error starting the OAuth login process. Please try again.", ephemeral=True)
 
 
 # Define YTDLSource class to handle audio playback from YouTube
 class YTDLSource(discord.PCMVolumeTransformer):
+
     def __init__(self, source, *, data, volume=0.5):
         super().__init__(source, volume)
         self.data = data
@@ -146,14 +94,18 @@ class YTDLSource(discord.PCMVolumeTransformer):
     @classmethod
     async def from_url(cls, url, *, loop=None):
         loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=False))
+        data = await loop.run_in_executor(
+            None, lambda: ytdl.extract_info(url, download=False))
 
         if 'entries' in data:
             data = data['entries'][0]
 
-        filename = data['url'] if 'url' in data else ytdl.sanitize_info(data)['url']
+        filename = data['url']
+        return cls(discord.FFmpegPCMAudio(executable="./ffmpeg",
+                                          source=filename,
+                                          **ffmpeg_options),
+                   data=data)
 
-        return cls(discord.FFmpegPCMAudio(executable="./ffmpeg", source=filename, **ffmpeg_options), data=data)
 
 # Search using YouTube Data API
 async def youtube_api_search(query):
@@ -182,6 +134,7 @@ async def youtube_api_search(query):
         print(f"API error: {e}")
         return None
 
+
 # Fallback to yt-dlp search
 async def yt_dlp_search(query):
     loop = asyncio.get_event_loop()
@@ -192,6 +145,7 @@ async def yt_dlp_search(query):
         'title': entry['title']
     } for entry in data.get('entries', [])]
 
+
 # Check API usage and fallback to yt-dlp if limit is hit
 async def search_youtube(query):
     videos = await youtube_api_search(query)
@@ -200,14 +154,11 @@ async def search_youtube(query):
         videos = await yt_dlp_search(query)
     return videos
 
-# Play the next song and add files to the deletion list
+
+# Play the next song
 async def play_next_song(voice_client):
     if song_queue:
         next_song = song_queue.pop(0)
-
-        # If the next song is a file, add it to the list for deletion later
-        if next_song['type'] == 'file':
-            files_to_delete.append(next_song['path'])
 
         if next_song['type'] == 'file':
             player = discord.FFmpegPCMAudio(next_song['path'])
@@ -215,21 +166,18 @@ async def play_next_song(voice_client):
             player = await YTDLSource.from_url(next_song['url'], loop=bot.loop)
 
         def after_playing(e):
-            # Delete the file after playing, if applicable
             if next_song['type'] == 'file':
                 try:
                     os.remove(next_song['path'])
-                    print(f"Deleted file: {next_song['path']}")
                 except Exception as err:
-                    print(f"Error deleting file {next_song['path']}: {err}")
-
-            asyncio.run_coroutine_threadsafe(play_next_song(voice_client), bot.loop)
+                    print(f"Error deleting file: {err}")
+            asyncio.run_coroutine_threadsafe(play_next_song(voice_client),
+                                             bot.loop)
 
         voice_client.play(player, after=after_playing)
     else:
         await voice_client.disconnect()
         song_queue.clear()
-
 
 
 # Class for video selection
@@ -354,9 +302,6 @@ async def upload_play(interaction: discord.Interaction):
         audio_file_path = os.path.join(AUDIO_FOLDER, audio_file.filename)
         await audio_file.save(audio_file_path)
 
-        # Add the file to the list of files to be deleted later
-        files_to_delete.append(audio_file_path)
-
         # Delete the Discord message that contained the uploaded file
         await message.delete()
 
@@ -391,66 +336,45 @@ async def upload_play(interaction: discord.Interaction):
             "You took too long to upload an audio file.", ephemeral=True)
 
 
-
-# Define a /skip command to skip the current song and manage file deletion
+# Define a /skip command to skip the current song
 @tree.command(
     name="skip",
     description="Skip the current song and play the next one in the queue")
 async def skip(interaction: discord.Interaction):
-    global files_to_delete
     voice_client = interaction.guild.voice_client
-
     if voice_client and voice_client.is_playing():
-        # Stop the current song
         voice_client.stop()
         await interaction.response.send_message("Skipped the current song.")
-
-        # If there are files to delete, delete the first one
-        if files_to_delete:
-            file_to_delete = files_to_delete.pop(0)
-            try:
-                os.remove(file_to_delete)
-                print(f"Deleted file: {file_to_delete}")
-            except Exception as e:
-                print(f"Error deleting file {file_to_delete}: {e}")
     else:
         await interaction.response.send_message(
             "No song is currently playing.", ephemeral=True)
 
 
-# Stop command to stop playback, disconnect, and clean up files
+# Define a /stop command to stop playback and disconnect the bot
 @tree.command(name="stop", description="Stop the audio and disconnect the bot")
 async def stop(interaction: discord.Interaction):
-    global files_to_delete
     voice_client = interaction.guild.voice_client
-
     if voice_client:
-        await interaction.response.send_message("Stopping playback and disconnecting the bot.")
+        # Acknowledge the interaction first to avoid timeout
+        await interaction.response.send_message(
+            "Stopping playback and disconnecting the bot.")
 
-        # Stop playback and disconnect the bot after stopping
-        voice_client.stop() 
-
-        # Disconnect the bot
+        # Disconnect the bot and clear the queue
         await voice_client.disconnect()
-
-        # Now delete all remaining files in the deletion list after bot has disconnected
-        while files_to_delete:
-            file_to_delete = files_to_delete.pop(0)
-            try:
-                if os.path.exists(file_to_delete):
-                    os.remove(file_to_delete)
-                else:
-                    print(f"File {file_to_delete} already deleted, skipping...")
-
-            except Exception as e:
-                print(f"Error deleting file {file_to_delete}: {e}")
-
-        # Clear the song queue and file deletion list
         song_queue.clear()
-        files_to_delete.clear()
 
+        # Delete any remaining audio files
+        for song in song_queue:
+            if song['type'] == 'file':
+                try:
+                    os.remove(song['path'])
+                    print(f"Deleted file: {song['path']}")
+                except Exception as delete_error:
+                    print(f"Error deleting file: {delete_error}")
     else:
-        await interaction.response.send_message("I'm not connected to a voice channel.", ephemeral=True)
+        await interaction.response.send_message(
+            "I'm not connected to a voice channel.", ephemeral=True)
+
 
 # Define a /queue command to list the current song queue
 @tree.command(name="queue", description="List the current song queue")
@@ -466,20 +390,6 @@ async def queue(interaction: discord.Interaction):
         await interaction.response.send_message(
             f"Current song queue:\n\n{queue_list}")
 
-@tree.command(name="test_local_audio", description="Test playing a local audio file")
-async def test_local_audio(interaction: discord.Interaction):
-    if not interaction.user.voice:
-        await interaction.response.send_message("You need to be in a voice channel.", ephemeral=True)
-        return
-
-    # Connect to the voice channel
-    voice_client = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
-
-    # Test with a local audio file
-    player = discord.FFmpegPCMAudio(executable="./ffmpeg", source="test_audio.mp3")  # Replace with your local test file path
-    voice_client.play(player)
-
-    await interaction.response.send_message("Started playing test audio!")
 
 # Sync slash commands when the bot is ready
 @bot.event

@@ -3,9 +3,7 @@ services:
     name: JiggyMusicBot
     env: python
     plan: free
-    buildCommand: |
-      chmod +x ffmpeg  # Set FFmpeg as executable
-      poetry install   # Install your Python dependencies
+    buildCommand: "poetry install"
     startCommand: "poetry run python main.py"
     envVars:
       - key: DISCORD_BOT_TOKEN
