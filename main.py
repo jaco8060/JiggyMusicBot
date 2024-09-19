@@ -71,7 +71,7 @@ files_to_delete = []
 
 # yt-dlp options using OAuth2 for authentication
 ytdl_format_options = {
-    'format': 'bestaudio[ext=mp3]/bestaudio[ext=m4a]',
+    'format': 'bestaudio[ext=m4a]',  # Ensure only M4A format is downloaded
     'outtmpl': f'{AUDIO_FOLDER}/%(extractor)s-%(id)s-%(title)s.%(ext)s',
     'restrictfilenames': True,
     'noplaylist': True,
@@ -90,7 +90,7 @@ ytdl_format_options = {
 
 ffmpeg_options = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn -loglevel debug'  # Add '-loglevel debug' for more details
+    'options': '-vn -loglevel trace'  # Add '-loglevel debug' for more details
 }
 
 
