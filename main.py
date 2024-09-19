@@ -71,7 +71,7 @@ files_to_delete = []
 
 # yt-dlp options using OAuth2 for authentication
 ytdl_format_options = {
-    'format': 'bestaudio/best',  # Remove the abr<=128k condition temporarily
+    'format': 'bestaudio[ext=mp3]/bestaudio[ext=m4a]',
     'outtmpl': f'{AUDIO_FOLDER}/%(extractor)s-%(id)s-%(title)s.%(ext)s',
     'restrictfilenames': True,
     'noplaylist': True,
