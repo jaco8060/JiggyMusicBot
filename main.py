@@ -18,6 +18,14 @@ logging.basicConfig(level=logging.INFO)
 # Load environment variables from the .env file
 load_dotenv()
 
+# Set up the YT_DLP_CACHE_DIR environment variable
+# This will ensure the token cache is stored in the specified directory
+os.environ['YT_DLP_CACHE_DIR'] = './token_cache'  # Path to token cache folder in your project
+
+# Ensure the cache directory exists
+if not os.path.exists('./token_cache'):
+    os.makedirs('./token_cache')
+
 # Initialize Flask web server to keep the bot alive
 keep_alive()
 
@@ -63,7 +71,7 @@ files_to_delete = []
 
 # yt-dlp options using OAuth2 for authentication
 ytdl_format_options = {
-    'format': 'bestaudio/best',
+    'format': 'bestaudio/best',  # Remove the abr<=128k condition temporarily
     'outtmpl': f'{AUDIO_FOLDER}/%(extractor)s-%(id)s-%(title)s.%(ext)s',
     'restrictfilenames': True,
     'noplaylist': True,
@@ -77,6 +85,7 @@ ytdl_format_options = {
     'source_address': '0.0.0.0',
     'username': 'oauth2',  # OAuth2 setup
     'password': '',  # Required by the OAuth2 plugin
+    'cache-dir': './token_cache',  # Specify cache directory using --cache-dir
 }
 
 ffmpeg_options = {
