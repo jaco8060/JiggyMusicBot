@@ -43,9 +43,7 @@ def cleanup_audio_folder():
         file_path = os.path.join(AUDIO_FOLDER, file_name)
         try:
             # Skip the .gitkeep file
-            if file_name == '.gitkeep':
-                continue
-            if os.path.isfile(file_path):
+            if file_name != '.gitkeep' and os.path.isfile(file_path):
                 os.remove(file_path)
                 print(f"Deleted file: {file_path}")
         except Exception as e:
@@ -57,6 +55,9 @@ cleanup_audio_folder()
 
 # Global song queue
 song_queue = []
+
+# List to track files that need to be deleted after playing or skipping
+files_to_delete = []
 
 # yt-dlp options
 ytdl_format_options = {
@@ -159,6 +160,10 @@ async def search_youtube(query):
 async def play_next_song(voice_client):
     if song_queue:
         next_song = song_queue.pop(0)
+
+          # If the next song is a file, add it to the list for deletion later
+        if next_song['type'] == 'file':
+            files_to_delete.append(next_song['path'])
 
         if next_song['type'] == 'file':
             player = discord.FFmpegPCMAudio(next_song['path'])
@@ -341,10 +346,16 @@ async def upload_play(interaction: discord.Interaction):
     name="skip",
     description="Skip the current song and play the next one in the queue")
 async def skip(interaction: discord.Interaction):
+    global files_to_delete
     voice_client = interaction.guild.voice_client
-    if voice_client and voice_client.is_playing():
-        voice_client.stop()
-        await interaction.response.send_message("Skipped the current song.")
+    # If there are files to delete, delete the first one
+    if files_to_delete:
+        file_to_delete = files_to_delete.pop(0)
+        try:
+            os.remove(file_to_delete)
+            print(f"Deleted file: {file_to_delete}")
+        except Exception as e:
+            print(f"Error deleting file {file_to_delete}: {e}")
     else:
         await interaction.response.send_message(
             "No song is currently playing.", ephemeral=True)
@@ -353,28 +364,30 @@ async def skip(interaction: discord.Interaction):
 # Define a /stop command to stop playback and disconnect the bot
 @tree.command(name="stop", description="Stop the audio and disconnect the bot")
 async def stop(interaction: discord.Interaction):
+    global files_to_delete
     voice_client = interaction.guild.voice_client
     if voice_client:
-        # Acknowledge the interaction first to avoid timeout
-        await interaction.response.send_message(
-            "Stopping playback and disconnecting the bot.")
+        await interaction.response.send_message("Stopping playback and disconnecting the bot.")
 
-        # Disconnect the bot and clear the queue
+        # Stop playback and disconnect the bot after stopping
+        voice_client.stop() 
+        # Disconnect the bot
         await voice_client.disconnect()
+        # Now delete all remaining files in the deletion list after bot has disconnected
+        while files_to_delete:
+            file_to_delete = files_to_delete.pop(0)
+            try:
+                if os.path.exists(file_to_delete):
+                    os.remove(file_to_delete)
+                else:
+                    print(f"File {file_to_delete} already deleted, skipping...")
+            except Exception as e:
+                print(f"Error deleting file {file_to_delete}: {e}")
+        # Clear the song queue and file deletion list
         song_queue.clear()
-
-        # Delete any remaining audio files
-        for song in song_queue:
-            if song['type'] == 'file':
-                try:
-                    os.remove(song['path'])
-                    print(f"Deleted file: {song['path']}")
-                except Exception as delete_error:
-                    print(f"Error deleting file: {delete_error}")
+        files_to_delete.clear()
     else:
-        await interaction.response.send_message(
-            "I'm not connected to a voice channel.", ephemeral=True)
-
+        await interaction.response.send_message("I'm not connected to a voice channel.", ephemeral=True)
 
 # Define a /queue command to list the current song queue
 @tree.command(name="queue", description="List the current song queue")
