@@ -71,8 +71,8 @@ files_to_delete = []
 
 # yt-dlp options using OAuth2 for authentication
 ytdl_format_options = {
-    'format': 'bestaudio[ext=m4a]',  # Ensure only M4A format is downloaded
-    'outtmpl': f'{AUDIO_FOLDER}/%(extractor)s-%(id)s-%(title)s.%(ext)s',
+    'format': 'bestaudio[ext=m4a]', 
+    'outtmpl': f'{AUDIO_FOLDER}/%(extractor)s-%(`id)s-%(title)s.%(ext)s',
     'restrictfilenames': True,
     'noplaylist': True,
     'nocheckcertificate': True,
@@ -89,9 +89,10 @@ ytdl_format_options = {
 }
 
 ffmpeg_options = {
-    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn -loglevel trace'  # Add '-loglevel debug' for more details
+    'before_options': '-re -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+    'options': '-vn -loglevel debug'
 }
+
 
 
 # yt-dlp instance with OAuth2 options
@@ -150,7 +151,8 @@ class YTDLSource(discord.PCMVolumeTransformer):
         if 'entries' in data:
             data = data['entries'][0]
 
-        filename = data['url']
+        filename = data['url'] if 'url' in data else ytdl.sanitize_info(data)['url']
+
         return cls(discord.FFmpegPCMAudio(executable="./ffmpeg", source=filename, **ffmpeg_options), data=data)
 
 # Search using YouTube Data API
