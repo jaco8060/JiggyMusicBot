@@ -348,6 +348,15 @@ async def upload_play(interaction: discord.Interaction):
 async def skip(interaction: discord.Interaction):
     global files_to_delete
     voice_client = interaction.guild.voice_client
+
+    if not voice_client or not voice_client.is_playing():
+        await interaction.response.send_message(
+            "No song is currently playing.", ephemeral=True)
+        return
+
+    # Stop the current song, which will trigger the after function to play the next song
+    voice_client.stop()
+
     # If there are files to delete, delete the first one
     if files_to_delete:
         file_to_delete = files_to_delete.pop(0)
@@ -356,9 +365,10 @@ async def skip(interaction: discord.Interaction):
             print(f"Deleted file: {file_to_delete}")
         except Exception as e:
             print(f"Error deleting file {file_to_delete}: {e}")
-    else:
-        await interaction.response.send_message(
-            "No song is currently playing.", ephemeral=True)
+
+    await interaction.response.send_message(
+        "Skipped the current song. Playing the next song in the queue.")
+
 
 
 # Define a /stop command to stop playback and disconnect the bot
