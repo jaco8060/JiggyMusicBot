@@ -1,13 +1,4 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*.so
-
-# Virtual environment
-venv/
 .env
-
-# Git LFS
-# *.exe
-
-poetry.lock
+__pycache__/
+*.pyc
+audio_files/

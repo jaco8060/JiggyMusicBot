@@ -7,15 +7,10 @@ import requests
 from discord import app_commands
 from dotenv import load_dotenv
 from discord.ui import Button, View
-from keep_alive import keep_alive  # Import the keep-alive script
 import html  # Import the html module for unescaping
-from keep_alive import keep_alive  # Import the keep-alive script
 
 # Load environment variables from the .env file
 load_dotenv()
-
-# Initialize Flask web server to keep the bot alive
-keep_alive()
 
 # Enable necessary intents to match the Developer Portal settings
 intents = discord.Intents.default()
@@ -58,6 +53,12 @@ song_queue = []
 
 # List to track files that need to be deleted after playing or skipping
 files_to_delete = []
+
+# Detect ffmpeg path depending on the environment
+if os.name == 'nt':  # Windows
+    ffmpeg_path = "./ffmpeg.exe"  # Assuming ffmpeg.exe is in the project root
+else:  # Unix/Linux including Raspberry Pi
+    ffmpeg_path = "/usr/bin/ffmpeg"  # Default path for ffmpeg in Docker
 
 # yt-dlp options
 ytdl_format_options = {
@@ -102,7 +103,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
             data = data['entries'][0]
 
         filename = data['url']
-        return cls(discord.FFmpegPCMAudio(executable="./ffmpeg",
+        return cls(discord.FFmpegPCMAudio(executable=ffmpeg_path,
                                           source=filename,
                                           **ffmpeg_options),
                    data=data)
@@ -420,9 +421,6 @@ async def on_ready():
     await tree.sync()
     print(f"Logged in as {bot.user} and ready!")
 
-
-# Keep the bot alive by running a small web server
-keep_alive()
 
 # Run the bot using the token from the .env file
 token = os.getenv('DISCORD_BOT_TOKEN')
