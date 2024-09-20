@@ -23,8 +23,5 @@ COPY . .
 # Ensure the audio_files directory exists
 RUN mkdir -p audio_files
 
-# Expose the port (if using Flask for keep-alive)
-EXPOSE 8080
-
 # Command to run the bot
 CMD ["poetry", "run", "python", "main.py"]
