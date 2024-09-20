@@ -102,7 +102,6 @@ ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 
 # Define YTDLSource class to handle audio playback from YouTube
 class YTDLSource(discord.PCMVolumeTransformer):
-
     def __init__(self, source, *, data, volume=0.5):
         super().__init__(source, volume)
         self.data = data
@@ -110,21 +109,19 @@ class YTDLSource(discord.PCMVolumeTransformer):
         self.url = data.get('url')
 
     @classmethod
-    async def from_url(cls, url, *, loop=None):
+    async def from_url(cls, url, *, loop=None, download=False):
         loop = loop or asyncio.get_event_loop()
         data = await loop.run_in_executor(
-            None, lambda: ytdl.extract_info(url, download=False))
-
-        if 'entries' in data:
-            data = data['entries'][0]
-
-        # Use 'url' from data directly
-        filename = data['url']
-    
-        return cls(discord.FFmpegPCMAudio(executable=ffmpeg_path,
-                                          source=filename,
-                                          **ffmpeg_options),
-                   data=data)
+            None, lambda: ytdl.extract_info(url, download=download, process=True)
+        )
+        
+        if 'entries' in data:  # Playlist
+            return [
+                cls(discord.FFmpegPCMAudio(executable=ffmpeg_path, source=entry['url'], **ffmpeg_options), data=entry)
+                for entry in data['entries']
+            ]
+        else:
+            return cls(discord.FFmpegPCMAudio(executable=ffmpeg_path, source=data['url'], **ffmpeg_options), data=data)
 
 
 # Search using YouTube Data API
@@ -255,58 +252,42 @@ class VideoSelectionView(View):
         await self.interaction.edit_original_response(view=self)
 
 
-# /play command
 @tree.command(name="play", description="Play a YouTube or SoundCloud link or search for a video/track")
 async def play(interaction, prompt: str):
     if not interaction.user.voice:
         await interaction.response.send_message(
             "You need to be in a voice channel.", ephemeral=True)
         return
-    
-    # Defer the interaction response to give time for processing
+
     await interaction.response.defer()
     
     # Connect to the voice channel or get the existing voice client
     voice_client = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
 
-    # Check if the input prompt is a URL
     if prompt.startswith("http"):
-        # Retrieve song data from the URL
-        song_data = await YTDLSource.from_url(prompt)
+        songs = await YTDLSource.from_url(prompt, loop=bot.loop, download=False)
         
-        # Add the song data to the queue
-        song_queue.append({
-            'url': prompt,
-            'title': song_data.title,
-            'type': 'url'
-        })
-        
-        # If not already playing, start playing the next song
+        if isinstance(songs, list):  # Playlist
+            for song in songs:
+                song_queue.append({'url': song.url, 'title': song.title, 'type': 'url'})
+            await interaction.followup.send(f'Added {len(songs)} songs to the queue from the playlist!')
+        else:  # Single track
+            song_queue.append({'url': songs.url, 'title': songs.title, 'type': 'url'})
+            await interaction.followup.send(f'Added **{songs.title}** to the queue.')
+
         if not voice_client.is_playing():
             await play_next_song(voice_client)
-            await interaction.followup.send(
-                f'Added **{song_data.title}** to the queue and started playing!'
-            )
-        else:
-            # If already playing, just add the song to the queue
-            await interaction.followup.send(
-                f'Added **{song_data.title}** to the queue.')
-        
     else:
-        # If not a URL, treat the prompt as a search query
         videos = await search_youtube(prompt)
         if not videos:
             await interaction.followup.send("No videos found.", ephemeral=True)
             return
         
-        # Create a view with buttons for the user to select from the top 5 search results
         view = VideoSelectionView(videos, interaction, voice_client)
         description = "\n".join([
             f"**(#{idx+1})** - {video['title']}"
             for idx, video in enumerate(videos[:5])
         ])
-        
-        # Display the top 5 search results for the user to choose
         await interaction.followup.send(
             f"Top 5 results for **{prompt}**:\n\n{description}", view=view)
 
