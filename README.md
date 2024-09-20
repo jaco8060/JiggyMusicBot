@@ -102,7 +102,7 @@ poetry run python main.py
 
 ### Inviting the Bot to Your Server
 
-To add the bot to your Discord server, use the following [Invite Link](https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot&permissions=YOUR_PERMISSIONS).
+To add the bot to your Discord server, use the following [Invite Link](https://discord.com/oauth2/authorize?client_id=1284369572476223511&permissions=3221504&integration_type=0&scope=applications.commands+bot).
 
 ## Commands and How to Use Them
 
