@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from discord.ui import Button, View
 import html  # Import the html module for unescaping
 import discord.opus
+import gc
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -111,17 +112,24 @@ class YTDLSource(discord.PCMVolumeTransformer):
     @classmethod
     async def from_url(cls, url, *, loop=None, download=False):
         loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(
-            None, lambda: ytdl.extract_info(url, download=download, process=True)
-        )
+        try:
+            data = await loop.run_in_executor(
+                None, lambda: ytdl.extract_info(url, download=download, process=True)
+            )
+
+            if 'entries' in data:  # Playlist
+                return [
+                    cls(discord.FFmpegPCMAudio(executable=ffmpeg_path, source=entry['url'], **ffmpeg_options), data=entry)
+                    for entry in data['entries']
+                ]
+            else:  # Single track
+                return cls(discord.FFmpegPCMAudio(executable=ffmpeg_path, source=data['url'], **ffmpeg_options), data=data)
         
-        if 'entries' in data:  # Playlist
-            return [
-                cls(discord.FFmpegPCMAudio(executable=ffmpeg_path, source=entry['url'], **ffmpeg_options), data=entry)
-                for entry in data['entries']
-            ]
-        else:
-            return cls(discord.FFmpegPCMAudio(executable=ffmpeg_path, source=data['url'], **ffmpeg_options), data=data)
+        except youtube_dl.utils.DownloadError as e:
+            print(f"DownloadError: {e}")
+            # Trigger garbage collection
+            gc.collect()
+            return f"Error: {str(e)}"  # Return the error message
 
 
 # Search using YouTube Data API
@@ -252,44 +260,71 @@ class VideoSelectionView(View):
         await self.interaction.edit_original_response(view=self)
 
 
+# Define the play command using the tree decorator
 @tree.command(name="play", description="Play a YouTube or SoundCloud link or search for a video/track")
 async def play(interaction, prompt: str):
+    # Check if the user is in a voice channel; if not, send an ephemeral message
     if not interaction.user.voice:
         await interaction.response.send_message(
             "You need to be in a voice channel.", ephemeral=True)
         return
 
+    # Defer the response to acknowledge the command and allow for processing time
     await interaction.response.defer()
-    
-    # Connect to the voice channel or get the existing voice client
+
+    # Connect to the voice channel or use the existing voice client
     voice_client = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
 
+    # Check if the prompt is a URL
     if prompt.startswith("http"):
+        # Try to retrieve the song(s) from the URL (playlist or single track)
         songs = await YTDLSource.from_url(prompt, loop=bot.loop, download=False)
         
-        if isinstance(songs, list):  # Playlist
+        # If songs is a list, it's a playlist
+        if isinstance(songs, list):
+            # Add each song in the playlist to the queue
             for song in songs:
                 song_queue.append({'url': song.url, 'title': song.title, 'type': 'url'})
+            # Notify the user that songs from the playlist have been added
             await interaction.followup.send(f'Added {len(songs)} songs to the queue from the playlist!')
-        else:  # Single track
+        
+        # If songs is a string starting with "Error", it's an error message
+        elif isinstance(songs, str) and songs.startswith("Error"):
+            # Send the error message to the user
+            await interaction.followup.send(songs)
+        
+        # Otherwise, it's a single track
+        else:
+            # Add the single track to the queue
             song_queue.append({'url': songs.url, 'title': songs.title, 'type': 'url'})
+            # Notify the user that the track has been added
             await interaction.followup.send(f'Added **{songs.title}** to the queue.')
 
+        # If no song is currently playing, start playing the next song in the queue
         if not voice_client.is_playing():
             await play_next_song(voice_client)
+    
+    # If the prompt is not a URL, treat it as a search query
     else:
+        # Search for videos on YouTube using the query
         videos = await search_youtube(prompt)
+        # If no videos are found, send a message to the user
         if not videos:
             await interaction.followup.send("No videos found.", ephemeral=True)
             return
         
+        # Create a view with buttons for the user to select from the top 5 search results
         view = VideoSelectionView(videos, interaction, voice_client)
+        # Format the search results into a readable description
         description = "\n".join([
             f"**(#{idx+1})** - {video['title']}"
             for idx, video in enumerate(videos[:5])
         ])
+        
+        # Send the search results with the interactive view
         await interaction.followup.send(
             f"Top 5 results for **{prompt}**:\n\n{description}", view=view)
+
 
 # Play an uploaded audio file and add it to the queue
 @tree.command(name="upload_play", description="Play an uploaded audio file")
@@ -408,6 +443,8 @@ async def stop(interaction: discord.Interaction):
         # Clear the song queue and file deletion list
         song_queue.clear()
         files_to_delete.clear()
+        # Trigger garbage collection
+        gc.collect()
     else:
         await interaction.response.send_message("I'm not connected to a voice channel.", ephemeral=True)
 
