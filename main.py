@@ -8,9 +8,25 @@ from discord import app_commands
 from dotenv import load_dotenv
 from discord.ui import Button, View
 import html  # Import the html module for unescaping
+import discord.opus
 
 # Load environment variables from the .env file
 load_dotenv()
+
+# Function to check if Opus is loaded
+def load_opus():
+    if not discord.opus.is_loaded():
+        # Manually load the Opus library from the expected location
+        try:
+            opus_path = '/usr/lib/libopus.so.0'
+            discord.opus.load_opus(opus_path)
+            print(f"Loaded Opus from {opus_path}")
+        except Exception as e:
+            print(f"Failed to load Opus: {e}")
+
+# Load Opus before initializing the bot
+load_opus()
+
 
 # Enable necessary intents to match the Developer Portal settings
 intents = discord.Intents.default()
