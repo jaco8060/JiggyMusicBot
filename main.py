@@ -205,13 +205,15 @@ async def play_next_song(voice_client):
     if song_queue:
         next_song = song_queue.pop(0)
 
-          # If the next song is a file, add it to the list for deletion later
+        # If the next song is a file, add it to the list for deletion later
         if next_song['type'] == 'file':
             files_to_delete.append(next_song['path'])
 
         if next_song['type'] == 'file':
             player = discord.FFmpegPCMAudio(next_song['path'])
         else:
+            # Print the URL of the song to be played
+            print(f"Now playing: {next_song['url']}")
             player = await YTDLSource.from_url(next_song['url'], loop=bot.loop, max_retries=3, retry_delay=5)
 
         def after_playing(e):
@@ -289,6 +291,7 @@ async def play(interaction, prompt: str):
             "You need to be in a voice channel.", ephemeral=True)
         return
 
+    print('testing play')
     # Defer the response to acknowledge the command and allow for processing time
     await interaction.response.defer()
 
