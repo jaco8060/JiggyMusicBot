@@ -214,28 +214,40 @@ async def play_next_song(voice_client):
         next_song = song_queue.pop(0)
 
         # Ensure the song has the correct structure
-        if 'url' not in next_song and 'query' not in next_song:
+        if 'url' not in next_song and 'query' not in next_song and 'path' not in next_song:
             logger.warning(f"Skipping invalid song entry: {next_song}")
             await play_next_song(voice_client)  # Skip to the next song
             return
 
-        # Fetch the playback URL just before playing
-        playback_url = await fetch_playback_url(next_song)
+        # Fetch the playback URL or file path just before playing
+        if next_song['type'] == 'url' or next_song['type'] == 'query':
+            playback_url = await fetch_playback_url(next_song)
 
-        if not playback_url:
-            logger.warning(f"Could not fetch URL for song: {next_song}")
-            if not song_queue:
-                await voice_client.disconnect()  # Stop if no more songs in the queue
-                logger.info("Queue is empty. Disconnected from voice channel.")
-            else:
+            if not playback_url:
+                logger.warning(f"Could not fetch URL for song: {next_song}")
                 await play_next_song(voice_client)  # Skip to the next song
+                return
+
+            # Log the URL of the song to be played
+            logger.info(f"Now playing URL: {playback_url}")
+            # Create the audio player using the fetched playback URL
+            player = discord.FFmpegPCMAudio(executable=ffmpeg_path, source=playback_url, **ffmpeg_options)
+
+        elif next_song['type'] == 'file':
+            # If it's a file, play the local file
+            file_path = next_song['path']
+            if not os.path.exists(file_path):
+                logger.warning(f"File not found: {file_path}. Skipping to the next song.")
+                await play_next_song(voice_client)  # Skip to the next song
+                return
+
+            logger.info(f"Now playing local file: {file_path}")
+            player = discord.FFmpegPCMAudio(executable=ffmpeg_path, source=file_path)
+
+        else:
+            logger.warning(f"Unknown song type for song: {next_song}. Skipping to the next song.")
+            await play_next_song(voice_client)  # Skip to the next song
             return
-
-        # Log the URL of the song to be played
-        logger.info(f"Now playing URL: {playback_url}")
-
-        # Create the audio player using the fetched playback URL
-        player = discord.FFmpegPCMAudio(executable=ffmpeg_path, source=playback_url, **ffmpeg_options)
 
         def after_playing(e):
             if e:
@@ -253,6 +265,7 @@ async def play_next_song(voice_client):
         await voice_client.disconnect()
         song_queue.clear()
         logger.info("Queue is empty. Disconnected from voice channel.")
+
 
 # Class for video selection
 class VideoSelectionView(View):
@@ -424,6 +437,7 @@ async def upload_play(interaction: discord.Interaction):
     except asyncio.TimeoutError:
         await interaction.followup.send(
             "You took too long to upload an audio file.", ephemeral=True)
+        
 # Define a /skip command to skip the current song
 @tree.command(
     name="skip",
