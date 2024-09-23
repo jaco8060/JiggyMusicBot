@@ -32,8 +32,8 @@ This bot allows you to play music, upload audio files, and manage music queues i
 
 1. Clone the repository:
    ```
-   git clone https://github.com/your-username/jiggy-music-bot.git
-   cd jiggy-music-bot
+   git clone https://github.com/jaco8060/JiggyMusicBot.git
+   cd JiggyMusicBot
    ```
 
 2. Create a `.env` file in the project directory:
