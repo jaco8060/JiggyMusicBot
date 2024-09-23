@@ -133,5 +133,6 @@ By using JiggyMusicBot, you agree to our [Terms of Service](TERMS.md).
 
 ## Privacy Policy
 Please review our [Privacy Policy](PRIVACY.md) to understand how we collect and use your data.
----
+
+--
 Enjoy using Jiggy Music Bot for all your music needs on Discord!
