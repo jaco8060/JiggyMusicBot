@@ -157,7 +157,6 @@ class YTDLSource(discord.PCMVolumeTransformer):
         return f"Error: {str(last_exception)}"  # Return the error message after max retries
 
 
-
 # Search using YouTube Data API
 async def youtube_api_search(query):
     params = {
@@ -205,37 +204,57 @@ async def search_youtube(query):
         videos = await yt_dlp_search(query)
     return videos
 
+# Fetch the playback URL just before playing the song
+async def fetch_playback_url(song):
+    """
+    Fetches the playback URL for a given song.
+    The song should have a 'type' (e.g., 'url', 'query') and relevant details.
+    """
+    if song['type'] == 'url':
+        # If the song already has a URL, return it
+        return song['url']
+    elif song['type'] == 'query':
+        # If it's a query, search for the URL using the YouTube API or yt-dlp
+        videos = await search_youtube(song['query'])
+        if videos:
+            return videos[0]['url']  # Return the first video result
+    return None  # Return None if no URL can be found
 
-# Play the next song
+# Function to play the next song in the queue
 async def play_next_song(voice_client):
     if song_queue:
         next_song = song_queue.pop(0)
 
-        # If the next song is a file, add it to the list for deletion later
-        if next_song['type'] == 'file':
-            files_to_delete.append(next_song['path'])
-            logger.info(f"Now playing local file: {next_song['path']}")  # Log the file path
+        # Fetch the playback URL just before playing
+        playback_url = await fetch_playback_url(next_song)
 
-        if next_song['type'] == 'file':
-            player = discord.FFmpegPCMAudio(next_song['path'])
-        else:
-            # Print the URL of the song to be played
-            logger.info(f"Now playing URL: {next_song['url']}")  # Log the URL of the song being played
-            player = await YTDLSource.from_url(next_song['url'], loop=bot.loop, max_retries=3, retry_delay=5)
+        if not playback_url:
+            logger.warning(f"Could not fetch URL for song: {next_song}")
+            await play_next_song(voice_client)  # Skip to the next song
+            return
+
+        # Log the URL of the song to be played
+        logger.info(f"Now playing URL: {playback_url}")
+
+        # Create the audio player using the fetched playback URL
+        player = discord.FFmpegPCMAudio(executable=ffmpeg_path, source=playback_url, **ffmpeg_options)
 
         def after_playing(e):
+            if e:
+                logger.error(f"Error occurred during playback: {e}")  # Log any error that occurs during playback
             if next_song['type'] == 'file':
                 try:
                     os.remove(next_song['path'])
                 except Exception as err:
                     logger.error(f"Error deleting file: {err}")  # Log error if file deletion fails
+            # Proceed to play the next song
             asyncio.run_coroutine_threadsafe(play_next_song(voice_client), bot.loop)
 
         voice_client.play(player, after=after_playing)
     else:
         await voice_client.disconnect()
         song_queue.clear()
-        logger.info("Queue is empty. Disconnected from voice channel.")  # Log when queue is empty and bot disconnects
+        logger.info("Queue is empty. Disconnected from voice channel.")  # Log when queue
 
         
 # Class for video selection
@@ -292,52 +311,47 @@ class VideoSelectionView(View):
 
 @tree.command(name="play", description="Play a YouTube or SoundCloud link or search for a video/track")
 async def play(interaction, prompt: str):
-    # Check if the user is in a voice channel; if not, send an ephemeral message
     if not interaction.user.voice:
         await interaction.response.send_message(
             "You need to be in a voice channel.", ephemeral=True)
         return
 
     logger.info(f"Received play command with prompt: {prompt}")  # Log the prompt received
-    # Defer the response to acknowledge the command and allow for processing time
     await interaction.response.defer()
 
-    # Connect to the voice channel or use the existing voice client
     voice_client = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
 
     # Check if the prompt is a URL
     if prompt.startswith("http"):
-        # Try to retrieve the song(s) from the URL (playlist or single track)
         songs = await YTDLSource.from_url(prompt, loop=bot.loop, download=False, max_retries=3, retry_delay=5)
         
         # If songs is a list, it's a playlist
         if isinstance(songs, list):
             for song in songs:
-                song_queue.append({'url': song.url, 'title': song.title, 'type': 'url'})
-                logger.info(f"Added song to queue: {song.url}")  # Log each URL added to the queue
+                song_queue.append({'video_id': song.data.get('id'), 'title': song.title, 'type': 'url'})
+                logger.info(f"Added song to queue: {song.title}")
             await interaction.followup.send(f'Added {len(songs)} songs to the queue from the playlist!')
         
         # If songs is a string starting with "Error", it's an error message
         elif isinstance(songs, str) and songs.startswith("Error"):
-            logger.error(f"Error while fetching song: {songs}")  # Log the error message
+            logger.error(f"Error while fetching song: {songs}")
             await interaction.followup.send(songs)
         
         # Otherwise, it's a single track
         else:
-            song_queue.append({'url': songs.url, 'title': songs.title, 'type': 'url'})
-            logger.info(f"Added single song to queue: {songs.url}")  # Log the URL of the single track
+            song_queue.append({'video_id': songs.data.get('id'), 'title': songs.title, 'type': 'url'})
+            logger.info(f"Added single song to queue: {songs.title}")
             await interaction.followup.send(f'Added **{songs.title}** to the queue.')
 
-        # If no song is currently playing, start playing the next song in the queue
         if not voice_client.is_playing():
             await play_next_song(voice_client)
     
     # If the prompt is not a URL, treat it as a search query
     else:
-        logger.info(f"Searching YouTube for query: {prompt}")  # Log the search query
+        logger.info(f"Searching YouTube for query: {prompt}")
         videos = await search_youtube(prompt)
         if not videos:
-            logger.warning(f"No videos found for query: {prompt}")  # Log if no videos are found
+            logger.warning(f"No videos found for query: {prompt}")
             await interaction.followup.send("No videos found.", ephemeral=True)
             return
         
@@ -349,8 +363,6 @@ async def play(interaction, prompt: str):
         
         await interaction.followup.send(
             f"Top 5 results for **{prompt}**:\n\n{description}", view=view)
-
-
 
 # Play an uploaded audio file and add it to the queue
 @tree.command(name="upload_play", description="Play an uploaded audio file")
