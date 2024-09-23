@@ -1,3 +1,4 @@
+
 # Jiggy Music Bot
 
 This bot allows you to play music, upload audio files, and manage music queues in a Discord server. It supports YouTube links and direct audio file uploads.
@@ -8,6 +9,7 @@ This bot allows you to play music, upload audio files, and manage music queues i
 3. [Raspberry Pi Implementation](#raspberry-pi-implementation)
 4. [Commands and How to Use Them](#commands-and-how-to-use-them)
 5. [Terms of Service and Privacy Policy](#terms-of-service-and-privacy-policy)
+6. [Dependencies](#dependencies)
 
 ## Creating Your Discord Bot
 
@@ -183,6 +185,23 @@ Run the script to build and start the bot:
 
 - `/queue`
   - **Description**: View the current queue of songs.
+
+# Dependencies
+
+This bot uses the following dependencies to work correctly:
+
+| Package              | Description                                                                                | Version          |
+|----------------------|--------------------------------------------------------------------------------------------|------------------|
+| discord.py           | A Python wrapper for the Discord API, used for creating bots.                              | 2.4.0            |
+| discord.ext.commands | Extension for discord.py to create bot commands.                                           | 2.4.0            |
+| yt_dlp               | A command-line program to download videos from YouTube and other video sites.              | 2024.8.6         |
+| requests             | A simple, yet elegant HTTP library for Python.                                             | 2.32.3           |
+| dotenv               | Reads key-value pairs from a .env file and adds them to environment variables.             | 1.0.0            |
+| pynacl               | Python bindings to the Networking and Cryptography library.                                | 1.5.0            |
+| ffmpeg               | A complete, cross-platform solution to record, convert and stream audio and video.         | 4.4.1            |
+| opus                 | A codec used for interactive speech and audio transmission over the internet.              | 1.3.1            |
+| poetry               | A tool for dependency management and packaging in Python.                                  | 1.1.13           |
+| python               | The base Python language and runtime environment.                                          | 3.10             |
 
 ## Terms of Service and Privacy Policy
 
