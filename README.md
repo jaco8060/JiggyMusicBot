@@ -15,13 +15,12 @@ This bot allows you to play music, upload audio files, and manage music queues i
 ### Step 2: Install Docker on DietPi
 
 1. After setting up DietPi, SSH into your Raspberry Pi Zero 2 W.
-2. DietPi provides an easy way to install software packages. To install Docker, use the following command:
+2. Visit the [DietPi Software Installation Tool guide](https://dietpi.com/docs/dietpi_tools/software_installation/) for detailed instructions on installing software packages.
+3. To install Docker, use the following command in the DietPi-Software tool:
    ```
-   sudo dietpi-software install 162
+   Docker
    ```
-   This command will install Docker and all its dependencies.
-
-3. For detailed instructions and troubleshooting, refer to the [DietPi Docker Installation Guide](https://dietpi.com/docs/software/programming/#docker).
+   This will install Docker and all its dependencies.
 
 4. After installation, reboot your Raspberry Pi:
    ```
