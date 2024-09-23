@@ -10,6 +10,12 @@ from discord.ui import Button, View
 import html  # Import the html module for unescaping
 import discord.opus
 import gc
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -208,12 +214,13 @@ async def play_next_song(voice_client):
         # If the next song is a file, add it to the list for deletion later
         if next_song['type'] == 'file':
             files_to_delete.append(next_song['path'])
+            logger.info(f"Now playing local file: {next_song['path']}")  # Log the file path
 
         if next_song['type'] == 'file':
             player = discord.FFmpegPCMAudio(next_song['path'])
         else:
             # Print the URL of the song to be played
-            print(f"Now playing: {next_song['url']}")
+            logger.info(f"Now playing URL: {next_song['url']}")  # Log the URL of the song being played
             player = await YTDLSource.from_url(next_song['url'], loop=bot.loop, max_retries=3, retry_delay=5)
 
         def after_playing(e):
@@ -221,14 +228,15 @@ async def play_next_song(voice_client):
                 try:
                     os.remove(next_song['path'])
                 except Exception as err:
-                    print(f"Error deleting file: {err}")
-            asyncio.run_coroutine_threadsafe(play_next_song(voice_client),
-                                             bot.loop)
+                    logger.error(f"Error deleting file: {err}")  # Log error if file deletion fails
+            asyncio.run_coroutine_threadsafe(play_next_song(voice_client), bot.loop)
 
         voice_client.play(player, after=after_playing)
     else:
         await voice_client.disconnect()
         song_queue.clear()
+        logger.info("Queue is empty. Disconnected from voice channel.")  # Log when queue is empty and bot disconnects
+
         
 # Class for video selection
 class VideoSelectionView(View):
@@ -282,7 +290,6 @@ class VideoSelectionView(View):
         await self.interaction.edit_original_response(view=self)
 
 
-# Define the play command using the tree decorator
 @tree.command(name="play", description="Play a YouTube or SoundCloud link or search for a video/track")
 async def play(interaction, prompt: str):
     # Check if the user is in a voice channel; if not, send an ephemeral message
@@ -291,7 +298,7 @@ async def play(interaction, prompt: str):
             "You need to be in a voice channel.", ephemeral=True)
         return
 
-    print('testing play')
+    logger.info(f"Received play command with prompt: {prompt}")  # Log the prompt received
     # Defer the response to acknowledge the command and allow for processing time
     await interaction.response.defer()
 
@@ -305,22 +312,20 @@ async def play(interaction, prompt: str):
         
         # If songs is a list, it's a playlist
         if isinstance(songs, list):
-            # Add each song in the playlist to the queue
             for song in songs:
                 song_queue.append({'url': song.url, 'title': song.title, 'type': 'url'})
-            # Notify the user that songs from the playlist have been added
+                logger.info(f"Added song to queue: {song.url}")  # Log each URL added to the queue
             await interaction.followup.send(f'Added {len(songs)} songs to the queue from the playlist!')
         
         # If songs is a string starting with "Error", it's an error message
         elif isinstance(songs, str) and songs.startswith("Error"):
-            # Send the error message to the user
+            logger.error(f"Error while fetching song: {songs}")  # Log the error message
             await interaction.followup.send(songs)
         
         # Otherwise, it's a single track
         else:
-            # Add the single track to the queue
             song_queue.append({'url': songs.url, 'title': songs.title, 'type': 'url'})
-            # Notify the user that the track has been added
+            logger.info(f"Added single song to queue: {songs.url}")  # Log the URL of the single track
             await interaction.followup.send(f'Added **{songs.title}** to the queue.')
 
         # If no song is currently playing, start playing the next song in the queue
@@ -329,24 +334,22 @@ async def play(interaction, prompt: str):
     
     # If the prompt is not a URL, treat it as a search query
     else:
-        # Search for videos on YouTube using the query
+        logger.info(f"Searching YouTube for query: {prompt}")  # Log the search query
         videos = await search_youtube(prompt)
-        # If no videos are found, send a message to the user
         if not videos:
+            logger.warning(f"No videos found for query: {prompt}")  # Log if no videos are found
             await interaction.followup.send("No videos found.", ephemeral=True)
             return
         
-        # Create a view with buttons for the user to select from the top 5 search results
         view = VideoSelectionView(videos, interaction, voice_client)
-        # Format the search results into a readable description
         description = "\n".join([
             f"**(#{idx+1})** - {video['title']}"
             for idx, video in enumerate(videos[:5])
         ])
         
-        # Send the search results with the interactive view
         await interaction.followup.send(
             f"Top 5 results for **{prompt}**:\n\n{description}", view=view)
+
 
 
 # Play an uploaded audio file and add it to the queue
