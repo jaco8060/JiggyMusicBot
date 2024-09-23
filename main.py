@@ -147,33 +147,6 @@ class YTDLSource(discord.PCMVolumeTransformer):
         logger.error(f"Failed to download after {max_retries} attempts. Last exception: {last_exception}")
         return None  # Return None after max retries
 
-
-
-# Search using YouTube Data API
-async def youtube_api_search(query):
-    params = {
-        'part': 'snippet',
-        'q': query,
-        'type': 'video',
-        'maxResults': 5,
-        'key': os.getenv("YOUTUBE_API_KEY")
-    }
-    try:
-        response = requests.get("https://www.googleapis.com/youtube/v3/search",
-                                params=params)
-        response.raise_for_status()
-        data = response.json()
-        videos = [
-            {
-                'url': f"https://www.youtube.com/watch?v={item['id']['videoId']}",
-                'title': html.unescape(item['snippet']['title'])  # Unescape HTML entities
-            } for item in data['items']
-        ]
-        return videos
-    except requests.exceptions.RequestException as e:
-        print(f"API error: {e}")
-        return None
-
 # Fallback to yt-dlp search
 async def yt_dlp_search(query):
     loop = asyncio.get_event_loop()
@@ -184,13 +157,6 @@ async def yt_dlp_search(query):
         'title': entry['title']
     } for entry in data.get('entries', [])]
 
-# Check API usage and fallback to yt-dlp if limit is hit
-async def search_youtube(query):
-    videos = await youtube_api_search(query)
-    if not videos:
-        print("YouTube API failed, falling back to yt-dlp.")
-        videos = await yt_dlp_search(query)
-    return videos
 
 # Fetch the playback URL just before playing the song
 async def fetch_playback_url(song):
@@ -266,8 +232,40 @@ async def play_next_song(voice_client):
         song_queue.clear()
         logger.info("Queue is empty. Disconnected from voice channel.")
 
+# Check API usage and fallback to yt-dlp if limit is hit
+async def search_youtube(query):
+    videos = await youtube_api_search(query)
+    if not videos:
+        print("YouTube API failed, falling back to yt-dlp.")
+        videos = await yt_dlp_search(query)
+    return videos
 
-# Class for video selection
+# Search using YouTube Data API
+async def youtube_api_search(query):
+    params = {
+        'part': 'snippet',
+        'q': query,
+        'type': 'video',
+        'maxResults': 5,
+        'key': os.getenv("YOUTUBE_API_KEY")
+    }
+    try:
+        response = requests.get("https://www.googleapis.com/youtube/v3/search",
+                                params=params)
+        response.raise_for_status()
+        data = response.json()
+        videos = [
+            {
+                'url': f"https://www.youtube.com/watch?v={item['id']['videoId']}",
+                'title': html.unescape(item['snippet']['title'])  # Unescape HTML entities
+            } for item in data['items']
+        ]
+        return videos
+    except requests.exceptions.RequestException as e:
+        print(f"API error: {e}")
+        return None
+    
+# Class for video selection with URL conversion and playback
 class VideoSelectionView(View):
     def __init__(self, videos, interaction, voice_client):
         super().__init__(timeout=120)
@@ -289,21 +287,36 @@ class VideoSelectionView(View):
 
             try:
                 video = self.videos[idx]
-                song_queue.append({
-                    'url': video['url'],
-                    'title': video['title'],
-                    'type': 'url'
-                })
-                if not self.voice_client.is_playing():
-                    await play_next_song(self.voice_client)
-                    await interaction.followup.send(
-                        f"Added **{video['title']}** to the queue and started playing!"
-                    )
+                logger.info(f"Button pressed for video: {video['title']} ({video['url']})")
+
+                # Convert the selected video URL into a playable URL
+                song = await YTDLSource.from_url(video['url'], loop=bot.loop, download=False, max_retries=3, retry_delay=5)
+
+                # Ensure the song is a valid YTDLSource object
+                if isinstance(song, str) and song.startswith("Error"):
+                    await interaction.followup.send(f"Error processing the video: {song}")
+                    return
+
+                # Add the selected video to the song queue
+                song_url = song.data.get('url', song.data.get('webpage_url', None))
+                if song_url:
+                    song_queue.append({'url': song_url, 'title': song.title, 'type': 'url'})
+                    logger.info(f"Added {song.title} to the queue. Current queue: {[song['title'] for song in song_queue]}")
+
+                    # Trigger playback if not currently playing
+                    if not self.voice_client.is_playing():
+                        await play_next_song(self.voice_client)
+                        await interaction.followup.send(
+                            f"Added **{song.title}** to the queue and started playing!"
+                        )
+                    else:
+                        await interaction.followup.send(
+                            f"Added **{song.title}** to the queue. Currently playing another song."
+                        )
                 else:
-                    await interaction.followup.send(
-                        f"Added **{video['title']}** to the queue.")
+                    await interaction.followup.send(f"Error: Could not retrieve a playable URL for the video.")
             except Exception as e:
-                # Handle any potential errors here and re-enable buttons if necessary
+                logger.error(f"Error in button callback: {e}")
                 await interaction.followup.send(f"An error occurred: {str(e)}")
 
         return callback
@@ -313,6 +326,7 @@ class VideoSelectionView(View):
         for child in self.children:
             child.disabled = True
         await self.interaction.edit_original_response(view=self)
+
 
 # Command to play a YouTube or SoundCloud link or search for a video/track
 @tree.command(name="play", description="Play a YouTube or SoundCloud link or search for a video/track")
@@ -329,12 +343,13 @@ async def play(interaction, prompt: str):
 
     # Check if the prompt is a URL
     if prompt.startswith("http"):
-        songs = await YTDLSource.from_url(prompt, loop=bot.loop, download=False, max_retries=3, retry_delay=5)
-        
+        # Handle as a direct URL
+        url = prompt
+        songs = await YTDLSource.from_url(url, loop=bot.loop, download=False, max_retries=3, retry_delay=5)
+
         # If songs is a list, it's a playlist
         if isinstance(songs, list):
             for song in songs:
-                # Ensure the URL is included in the song object
                 song_url = song.data.get('url', song.data.get('webpage_url', None))
                 if song_url:
                     song_queue.append({'url': song_url, 'title': song.title, 'type': 'url'})
@@ -342,12 +357,12 @@ async def play(interaction, prompt: str):
                 else:
                     logger.warning(f"Skipping song with missing URL: {song.title}")
             await interaction.followup.send(f'Added {len(songs)} songs to the queue from the playlist!')
-        
+
         # If songs is a string starting with "Error", it's an error message
         elif isinstance(songs, str) and songs.startswith("Error"):
             logger.error(f"Error while fetching song: {songs}")
             await interaction.followup.send(songs)
-        
+
         # Otherwise, it's a single track
         else:
             song_url = songs.data.get('url', songs.data.get('webpage_url', None))
@@ -371,6 +386,7 @@ async def play(interaction, prompt: str):
             await interaction.followup.send("No videos found.", ephemeral=True)
             return
         
+        # Use VideoSelectionView to show the top 5 results for user selection
         view = VideoSelectionView(videos, interaction, voice_client)
         description = "\n".join([
             f"**(#{idx+1})** - {video['title']}"
@@ -379,6 +395,7 @@ async def play(interaction, prompt: str):
         
         await interaction.followup.send(
             f"Top 5 results for **{prompt}**:\n\n{description}", view=view)
+
 
 # Play an uploaded audio file and add it to the queue
 @tree.command(name="upload_play", description="Play an uploaded audio file")
