@@ -1,8 +1,88 @@
 # Jiggy Music Bot
 
-This bot allows you to play music, upload audio files, and manage music queues in a Discord server. It supports YouTube links and direct audio file uploads. This project is designed to run on a Raspberry Pi Zero 2 W using DietPi as the operating system.
+This bot allows you to play music, upload audio files, and manage music queues in a Discord server. It supports YouTube links and direct audio file uploads.
 
-## Setting Up the Project
+## Table of Contents
+1. [Creating Your Discord Bot](#creating-your-discord-bot)
+2. [Running the Bot on Windows](#running-the-bot-on-windows)
+3. [Raspberry Pi Implementation](#raspberry-pi-implementation)
+4. [Commands and How to Use Them](#commands-and-how-to-use-them)
+5. [Terms of Service and Privacy Policy](#terms-of-service-and-privacy-policy)
+
+## Creating Your Discord Bot
+
+1. Go to the [Discord Developer Portal](https://discord.com/developers/applications).
+2. Click on "New Application" and give your bot a name.
+3. Navigate to the "Bot" tab on the left sidebar.
+4. Click "Add Bot" and confirm by clicking "Yes, do it!"
+5. Under the "TOKEN" section, click "Copy" to copy your bot token. You'll need this for the `.env` file.
+6. Scroll down to the "Privileged Gateway Intents" section and enable "MESSAGE CONTENT INTENT".
+7. Click "Save Changes" at the bottom of the page.
+
+### Inviting Your Bot to Your Server
+
+1. In the Discord Developer Portal, go to the "OAuth2" tab in the left sidebar.
+2. Scroll down to the "OAuth2 URL Generator" section.
+3. Under "SCOPES", check the boxes for:
+   - `bot`
+   - `applications.commands`
+4. Under "BOT PERMISSIONS", check the boxes for:
+   - Send Messages
+   - Connect
+   - Speak
+   - Manage Messages
+   - Read Message History
+5. Scroll down and copy the generated URL.
+6. Open this URL in a new browser tab.
+7. Select the server you want to add the bot to and click "Authorize".
+
+## Running the Bot on Windows
+
+### Prerequisites
+- [Git](https://git-scm.com/downloads)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop)
+
+### Steps
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/jaco8060/JiggyMusicBot.git
+   cd JiggyMusicBot
+   ```
+
+2. Create a `.env` file in the project directory:
+   ```
+   notepad .env
+   ```
+
+3. Add your environment variables to the `.env` file:
+   ```
+   DISCORD_BOT_TOKEN=<your-discord-bot-token>
+   YOUTUBE_API_KEY=<your-youtube-api-key>
+   ```
+
+4. Create a batch file named `start_bot.bat` in the project directory:
+   ```
+   notepad start_bot.bat
+   ```
+
+5. Add the following content to the batch file:
+   ```batch
+   @echo off
+   docker build -t jiggybot1 .
+   docker stop jiggyBotContainer1
+   docker rm jiggyBotContainer1
+   docker run -d --name jiggyBotContainer1 --env-file .env --restart unless-stopped jiggybot1
+   ```
+
+6. Run the batch file to build and start the bot:
+   ```
+   start_bot.bat
+   ```
+
+## Raspberry Pi Implementation
+
+This implementation is designed for a Raspberry Pi Zero 2 W using DietPi as the operating system.
 
 ### Step 1: Set Up Your Raspberry Pi Zero 2 W with DietPi
 
@@ -85,57 +165,6 @@ Run the script to build and start the bot:
 ./start_bot.sh
 ```
 
-This script will build the Docker image, stop any existing container (if running), and start a new container with the specified settings.
-
-## Obtaining Necessary Tokens and Keys
-
-### Discord Bot Token
-
-1. Go to the [Discord Developer Portal](https://discord.com/developers/applications).
-2. Click "New Application" and give your bot a name.
-3. Navigate to the "Bot" tab and click "Add Bot".
-4. Under "Token", click "Copy" to get your bot token. **Keep this token private!**
-
-### YouTube API Key
-
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
-2. Click on the project dropdown and select "New Project".
-3. Give your project a name and click "Create".
-4. Navigate to the "API & Services" section and click "Enable APIs and Services".
-5. Search for "YouTube Data API v3" and enable it.
-6. Click on "Create Credentials", choose "API key", and copy the generated key.
-
-## Creating Your Own Music Bot
-
-To create your own instance of the Jiggy Music Bot and invite it to your server, follow these steps:
-
-1. Go to the [Discord Developer Portal](https://discord.com/developers/applications).
-2. Click on "New Application" and give your bot a name.
-3. Navigate to the "Bot" tab on the left sidebar.
-4. Click "Add Bot" and confirm by clicking "Yes, do it!"
-5. Under the "TOKEN" section, click "Copy" to copy your bot token. You'll need this for the `.env` file.
-6. Scroll down to the "Privileged Gateway Intents" section and enable "MESSAGE CONTENT INTENT".
-7. Click "Save Changes" at the bottom of the page.
-
-### Inviting Your Bot to Your Server
-
-1. In the Discord Developer Portal, go to the "OAuth2" tab in the left sidebar.
-2. Scroll down to the "OAuth2 URL Generator" section.
-3. Under "SCOPES", check the boxes for:
-   - `bot`
-   - `applications.commands`
-4. Under "BOT PERMISSIONS", check the boxes for:
-   - Send Messages
-   - Connect
-   - Speak
-   - Manage Messages
-   - Read Message History
-5. Scroll down and copy the generated URL.
-6. Open this URL in a new browser tab.
-7. Select the server you want to add the bot to and click "Authorize".
-
-Now you have created your own instance of the Jiggy Music Bot and invited it to your server. Make sure to use the bot token you copied in step 5 of the creation process in your `.env` file.
-
 ## Commands and How to Use Them
 
 - `/play <YouTube URL or Search Query>`
@@ -155,13 +184,10 @@ Now you have created your own instance of the Jiggy Music Bot and invited it to 
 - `/queue`
   - **Description**: View the current queue of songs.
 
-## Terms of Service
+## Terms of Service and Privacy Policy
 
-By using JiggyMusicBot, you agree to our [Terms of Service](TERMS.md).
-
-## Privacy Policy
-
-Please review our [Privacy Policy](PRIVACY.md) to understand how we collect and use your data.
+- By using JiggyMusicBot, you agree to our [Terms of Service](TERMS.md).
+- Please review our [Privacy Policy](PRIVACY.md) to understand how we collect and use your data.
 
 ---
-Enjoy using Jiggy Music Bot on your Raspberry Pi Zero 2 W for all your Discord music needs!
+Enjoy using Jiggy Music Bot for all your Discord music needs!
