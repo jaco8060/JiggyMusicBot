@@ -102,9 +102,36 @@ This script will build the Docker image, stop any existing container (if running
 5. Search for "YouTube Data API v3" and enable it.
 6. Click on "Create Credentials", choose "API key", and copy the generated key.
 
-### Inviting the Bot to Your Server
+## Creating Your Own Music Bot
 
-To add the bot to your Discord server, use the following [Invite Link](https://discord.com/oauth2/authorize?client_id=1284369572476223511&permissions=3221504&integration_type=0&scope=applications.commands+bot).
+To create your own instance of the Jiggy Music Bot and invite it to your server, follow these steps:
+
+1. Go to the [Discord Developer Portal](https://discord.com/developers/applications).
+2. Click on "New Application" and give your bot a name.
+3. Navigate to the "Bot" tab on the left sidebar.
+4. Click "Add Bot" and confirm by clicking "Yes, do it!"
+5. Under the "TOKEN" section, click "Copy" to copy your bot token. You'll need this for the `.env` file.
+6. Scroll down to the "Privileged Gateway Intents" section and enable "MESSAGE CONTENT INTENT".
+7. Click "Save Changes" at the bottom of the page.
+
+### Inviting Your Bot to Your Server
+
+1. In the Discord Developer Portal, go to the "OAuth2" tab in the left sidebar.
+2. Scroll down to the "OAuth2 URL Generator" section.
+3. Under "SCOPES", check the boxes for:
+   - `bot`
+   - `applications.commands`
+4. Under "BOT PERMISSIONS", check the boxes for:
+   - Send Messages
+   - Connect
+   - Speak
+   - Manage Messages
+   - Read Message History
+5. Scroll down and copy the generated URL.
+6. Open this URL in a new browser tab.
+7. Select the server you want to add the bot to and click "Authorize".
+
+Now you have created your own instance of the Jiggy Music Bot and invited it to your server. Make sure to use the bot token you copied in step 5 of the creation process in your `.env` file.
 
 ## Commands and How to Use Them
 
