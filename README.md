@@ -127,4 +127,11 @@ To add the bot to your Discord server, use the following [Invite Link](https://d
 - `/queue`
   - **Description**: View the current queue of songs.
 
+## Terms of Service
+
+By using JiggyMusicBot, you agree to our [Terms of Service](TERMS.md).
+
+### [Click here to read the Terms of Service](TERMS.md).
+
+
 Enjoy using Jiggy Music Bot for all your music needs on Discord!
