@@ -115,26 +115,41 @@ class YTDLSource(discord.PCMVolumeTransformer):
         self.url = data.get('url')
 
     @classmethod
-    async def from_url(cls, url, *, loop=None, download=False):
+    async def from_url(cls, url, *, loop=None, download=False, max_retries=3, retry_delay=5):
         loop = loop or asyncio.get_event_loop()
-        try:
-            data = await loop.run_in_executor(
-                None, lambda: ytdl.extract_info(url, download=download, process=True)
-            )
-
-            if 'entries' in data:  # Playlist
-                return [
-                    cls(discord.FFmpegPCMAudio(executable=ffmpeg_path, source=entry['url'], **ffmpeg_options), data=entry)
-                    for entry in data['entries']
-                ]
-            else:  # Single track
-                return cls(discord.FFmpegPCMAudio(executable=ffmpeg_path, source=data['url'], **ffmpeg_options), data=data)
+        attempts = 0
+        last_exception = None
         
-        except youtube_dl.utils.DownloadError as e:
-            print(f"DownloadError: {e}")
-            # Trigger garbage collection
-            gc.collect()
-            return f"Error: {str(e)}"  # Return the error message
+        while attempts < max_retries:
+            try:
+                data = await loop.run_in_executor(
+                    None, lambda: ytdl.extract_info(url, download=download, process=True)
+                )
+                
+                # Check if it's a playlist or a single track
+                if 'entries' in data:  # Playlist
+                    return [
+                        cls(discord.FFmpegPCMAudio(executable=ffmpeg_path, source=entry['url'], **ffmpeg_options), data=entry)
+                        for entry in data['entries']
+                    ]
+                else:  # Single track
+                    return cls(discord.FFmpegPCMAudio(executable=ffmpeg_path, source=data['url'], **ffmpeg_options), data=data)
+                
+            except youtube_dl.utils.DownloadError as e:
+                last_exception = e
+                print(f"DownloadError: {e}. Retrying in {retry_delay} seconds...")
+                await asyncio.sleep(retry_delay)
+                attempts += 1
+            
+            except Exception as e:
+                last_exception = e
+                print(f"Unexpected error: {e}. Retrying in {retry_delay} seconds...")
+                await asyncio.sleep(retry_delay)
+                attempts += 1
+        
+        print(f"Failed to download after {max_retries} attempts. Last exception: {last_exception}")
+        return f"Error: {str(last_exception)}"  # Return the error message after max retries
+
 
 
 # Search using YouTube Data API
@@ -197,7 +212,7 @@ async def play_next_song(voice_client):
         if next_song['type'] == 'file':
             player = discord.FFmpegPCMAudio(next_song['path'])
         else:
-            player = await YTDLSource.from_url(next_song['url'], loop=bot.loop)
+            player = await YTDLSource.from_url(next_song['url'], loop=bot.loop, max_retries=3, retry_delay=5)
 
         def after_playing(e):
             if next_song['type'] == 'file':
@@ -283,7 +298,7 @@ async def play(interaction, prompt: str):
     # Check if the prompt is a URL
     if prompt.startswith("http"):
         # Try to retrieve the song(s) from the URL (playlist or single track)
-        songs = await YTDLSource.from_url(prompt, loop=bot.loop, download=False)
+        songs = await YTDLSource.from_url(prompt, loop=bot.loop, download=False, max_retries=3, retry_delay=5)
         
         # If songs is a list, it's a playlist
         if isinstance(songs, list):
