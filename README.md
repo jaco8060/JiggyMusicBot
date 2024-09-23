@@ -66,6 +66,9 @@ docker build -t jiggybot1 .
 # Stop the existing container if running
 docker stop jiggyBotContainer1
 
+# Remove the existing container
+docker rm jiggyBotContainer1
+
 # Run a new container with the built image
 docker run -d --name jiggyBotContainer1 --cpus="4.0" --env-file .env --restart unless-stopped jiggybot1
 ```
