@@ -21,7 +21,7 @@ RUN poetry config virtualenvs.create false && \
 COPY . .
 
 # Ensure the audio_files directory exists
-RUN mkdir -p audio_files
+RUN mkdir -p /data/audio_files
 
 # Command to run the bot
 CMD ["poetry", "run", "python", "main.py"]
