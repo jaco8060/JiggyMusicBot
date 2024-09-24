@@ -1,3 +1,4 @@
+# Dockerfile
 # Use the Alpine base image for a lightweight container
 FROM python:3.10-alpine
 
@@ -21,7 +22,7 @@ RUN poetry config virtualenvs.create false && \
 COPY . .
 
 # Ensure the audio_files directory exists
-RUN mkdir -p /data/audio_files
+RUN mkdir -p audio_files
 
 # Command to run the bot
-CMD ["poetry", "run", "python", "main.py"]
+CMD ["poetry", "run", "python", "bot/main.py"]
