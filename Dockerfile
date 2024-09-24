@@ -25,4 +25,4 @@ COPY . .
 RUN mkdir -p audio_files
 
 # Command to run the bot
-CMD ["poetry", "run", "python", "bot/main.py"]
+CMD ["poetry", "run", "python", "-m", "bot.main"]
