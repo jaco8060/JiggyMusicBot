@@ -1,28 +1,20 @@
-# Dockerfile
-# Use the Alpine base image for a lightweight container
-FROM python:3.10-alpine
+# Use an official Node.js image for ARM architectures (e.g., Raspberry Pi)
+FROM node:18-buster-slim
 
-# Install FFmpeg, Opus, and other necessary packages with no-cache for a smaller image size
-RUN apk add --no-cache ffmpeg opus
-
-# Install Poetry for dependency management
-RUN pip install --no-cache-dir poetry
-
-# Set the working directory in the container
+# Set the working directory
 WORKDIR /app
 
-# Copy only the dependency files to the container to leverage Docker caching
-COPY pyproject.toml poetry.lock ./
+# Copy package.json and package-lock.json
+COPY package*.json ./
 
-# Install project dependencies using Poetry
-RUN poetry config virtualenvs.create false && \
-    poetry install --no-root --no-dev --no-interaction --no-ansi
+# Install dependencies
+RUN npm install --production
 
-# Copy the rest of the application files
+# Copy the rest of the application code
 COPY . .
 
-# Ensure the audio_files directory exists
-RUN mkdir -p audio_files
+# Expose necessary ports (if any)
+EXPOSE 3000
 
-# Command to run the bot
-CMD ["poetry", "run", "python", "-m", "bot.main"]
+# Start the bot
+CMD ["npm", "run", "start"]
