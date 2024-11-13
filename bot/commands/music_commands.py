@@ -38,40 +38,54 @@ class MusicCommands(commands.Cog):
 
         # Check if the prompt is a URL
         if prompt.startswith("http"):
-            # Handle as a direct URL
-            songs = await YTDLSource.from_url(
-                prompt, loop=self.bot.loop, download=False
+            # Fetch minimal info without processing formats
+            data = await YTDLSource.from_url(
+                prompt, loop=self.bot.loop, download=False, process=False
             )
 
-            if isinstance(songs, list):
-                for song in songs:
-                    song_url = song.data.get("url", song.data.get("webpage_url", None))
-                    if song_url:
-                        song_queue.append(
-                            {"url": song_url, "title": song.title, "type": "url"}
-                        )
-                        logger.info(f"Added song to queue: {song.title}")
+            if data is None:
+                await interaction.followup.send("Error retrieving information from the URL.")
+                return
+
+            if 'entries' in data:  # Playlist
+                # Convert the generator to a list
+                entries = list(data['entries'])
+                for entry in entries:
+                    # Handle missing 'webpage_url'
+                    video_url = entry.get('webpage_url')
+                    if not video_url:
+                        video_id = entry.get('id')
+                        if video_id:
+                            video_url = f"https://www.youtube.com/watch?v={video_id}"
+                        else:
+                            logger.warning(f"Skipping song with missing URL: {entry.get('title', 'Unknown title')}")
+                            continue
+                    song_queue.append({
+                        "url": video_url,
+                        "title": entry.get('title', 'Unknown title'),
+                        "type": "url"
+                    })
                 await interaction.followup.send(
-                    f"Added {len(songs)} songs to the queue from the playlist!"
+                    f"Added {len(entries)} songs to the queue from the playlist!"
                 )
-            elif isinstance(songs, str) and songs.startswith("Error"):
-                logger.error(f"Error while fetching song: {songs}")
-                await interaction.followup.send(songs)
-            else:
-                song_url = songs.data.get("url", songs.data.get("webpage_url", None))
-                if song_url:
-                    song_queue.append(
-                        {"url": song_url, "title": songs.title, "type": "url"}
-                    )
-                    logger.info(f"Added single song to queue: {songs.title}")
-                    await interaction.followup.send(
-                        f"Added **{songs.title}** to the queue."
-                    )
-                else:
-                    logger.warning(f"Skipping song with missing URL: {songs.title}")
-                    await interaction.followup.send(
-                        f"Error: Could not retrieve URL for the song {songs.title}."
-                    )
+            else:  # Single track
+                # Handle missing 'webpage_url'
+                video_url = data.get('webpage_url')
+                if not video_url:
+                    video_id = data.get('id')
+                    if video_id:
+                        video_url = f"https://www.youtube.com/watch?v={video_id}"
+                    else:
+                        await interaction.followup.send("Could not retrieve video URL.")
+                        return
+                song_queue.append({
+                    "url": video_url,
+                    "title": data.get('title', 'Unknown title'),
+                    "type": "url"
+                })
+                await interaction.followup.send(
+                    f"Added **{data.get('title', 'Unknown title')}** to the queue."
+                )
 
             if not voice_client.is_playing():
                 await play_next_song(voice_client)
@@ -193,7 +207,7 @@ class MusicCommands(commands.Cog):
     async def stop(self, interaction: discord.Interaction):
         voice_client = interaction.guild.voice_client
 
-        if voice_client:
+        if voice_client and voice_client.is_connected():
             logger.info(
                 f"Received stop command from {interaction.user}. Stopping playback and disconnecting the bot."
             )
@@ -204,20 +218,6 @@ class MusicCommands(commands.Cog):
             # Stop playback and disconnect the bot after stopping
             voice_client.stop()
             await voice_client.disconnect()
-
-            # Now delete all remaining files in the deletion list after bot has disconnected
-            while files_to_delete:
-                file_to_delete = files_to_delete.pop(0)
-                try:
-                    if os.path.exists(file_to_delete):
-                        os.remove(file_to_delete)
-                        logger.info(f"Deleted file: {file_to_delete}")
-                    else:
-                        logger.warning(
-                            f"File {file_to_delete} already deleted, skipping..."
-                        )
-                except Exception as e:
-                    logger.error(f"Error deleting file {file_to_delete}: {e}")
 
             # Clear the song queue and file deletion list
             song_queue.clear()

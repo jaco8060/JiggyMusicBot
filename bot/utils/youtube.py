@@ -1,5 +1,6 @@
 # bot/utils/youtube.py
-import discord  # Add this import at the top of the file
+
+import discord
 import yt_dlp as youtube_dl
 import asyncio
 import logging
@@ -14,7 +15,7 @@ ytdl_format_options = {
     'format': 'bestaudio/best',
     'outtmpl': 'audio_files/%(extractor)s-%(id)s-%(title)s.%(ext)s',
     'restrictfilenames': True,
-    'noplaylist': True,
+    'noplaylist': False,  # Allow playlists
     'nocheckcertificate': True,
     'ignoreerrors': False,
     'logtostderr': False,
@@ -51,16 +52,21 @@ class YTDLSource(discord.PCMVolumeTransformer):
         self.url = data.get('url')
 
     @classmethod
-    async def from_url(cls, url, *, loop=None, download=False, max_retries=3, retry_delay=5):
+    async def from_url(cls, url, *, loop=None, download=False, process=True, max_retries=3, retry_delay=5):
         loop = loop or asyncio.get_event_loop()
         attempts = 0
         last_exception = None
 
         while attempts < max_retries:
             try:
+                # Set 'process' parameter based on the argument
                 data = await loop.run_in_executor(
-                    None, lambda: ytdl.extract_info(url, download=download, process=True)
+                    None, lambda: ytdl.extract_info(url, download=download, process=process)
                 )
+
+                if not process:
+                    # Return raw data without processing formats
+                    return data
 
                 # Check if it's a playlist or a single track
                 if 'entries' in data:  # Playlist

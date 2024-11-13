@@ -4,7 +4,7 @@ import discord
 import os
 import asyncio
 import logging
-from bot.utils.youtube import search_youtube  
+from bot.utils.youtube import YTDLSource, search_youtube  
 
 logger = logging.getLogger(__name__)
 
@@ -27,16 +27,24 @@ ffmpeg_options = {
 async def fetch_playback_url(song):
     """
     Fetches the playback URL for a given song.
-    The song should have a 'type' (e.g., 'url', 'query') and relevant details.
+    The song should have a 'type' (e.g., 'url', 'query', 'file') and relevant details.
     """
     if song['type'] == 'url':
-        # If the song already has a URL, return it
-        return song['url']
+        # Fetch the playback URL using YTDLSource with process=True
+        data = await YTDLSource.from_url(
+            song['url'], loop=asyncio.get_event_loop(), download=False, process=True
+        )
+        if data is None:
+            return None
+        return data.data.get('url')
     elif song['type'] == 'query':
         # If it's a query, search for the URL using the YouTube API or yt-dlp
         videos = await search_youtube(song['query'])
         if videos:
             return videos[0]['url']  # Return the first video result
+    elif song['type'] == 'file':
+        # For local files, return the file path
+        return song['path']
     return None  # Return None if no URL can be found
 
 # Function to play the next song in the queue
@@ -51,36 +59,23 @@ async def play_next_song(voice_client):
             return
 
         # Fetch the playback URL or file path just before playing
-        if next_song['type'] == 'url' or next_song['type'] == 'query':
-            playback_url = await fetch_playback_url(next_song)
+        playback_url = await fetch_playback_url(next_song)
 
-            if not playback_url:
-                logger.warning(f"Could not fetch URL for song: {next_song}")
-                await play_next_song(voice_client)  # Skip to the next song
-                return
-
-            # Log the URL of the song to be played
-            logger.info(f"Now playing URL: {playback_url}")
-            # Create the audio player using the fetched playback URL
-            player = discord.FFmpegPCMAudio(
-                executable=ffmpeg_path, source=playback_url, **ffmpeg_options)
-
-        elif next_song['type'] == 'file':
-            # If it's a file, play the local file
-            file_path = next_song['path']
-            if not os.path.exists(file_path):
-                logger.warning(f"File not found: {file_path}. Skipping to the next song.")
-                await play_next_song(voice_client)  # Skip to the next song
-                return
-
-            logger.info(f"Now playing local file: {file_path}")
-            player = discord.FFmpegPCMAudio(
-                executable=ffmpeg_path, source=file_path)
-
-        else:
-            logger.warning(f"Unknown song type for song: {next_song}. Skipping to the next song.")
+        if not playback_url:
+            logger.warning(f"Could not fetch URL for song: {next_song}")
             await play_next_song(voice_client)  # Skip to the next song
             return
+
+        # Log the URL of the song to be played
+        logger.info(f"Now playing: {next_song.get('title', 'Unknown title')}")
+
+        # Create the audio player using the fetched playback URL or file path
+        if next_song['type'] == 'file':
+            player = discord.FFmpegPCMAudio(
+                executable=ffmpeg_path, source=playback_url)
+        else:
+            player = discord.FFmpegPCMAudio(
+                executable=ffmpeg_path, source=playback_url, **ffmpeg_options)
 
         def after_playing(e):
             if e:
@@ -91,7 +86,12 @@ async def play_next_song(voice_client):
                 except Exception as err:
                     logger.error(f"Error deleting file: {err}")
             # Proceed to play the next song
-            asyncio.run_coroutine_threadsafe(play_next_song(voice_client), voice_client.loop)
+            coro = play_next_song(voice_client)
+            fut = asyncio.run_coroutine_threadsafe(coro, voice_client.loop)
+            try:
+                fut.result()
+            except Exception as e:
+                logger.error(f"Error in after_playing: {e}")
 
         voice_client.play(player, after=after_playing)
     else:

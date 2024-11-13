@@ -1,4 +1,5 @@
 # bot/bot.py
+
 import discord
 from discord.ext import commands
 from bot.utils.config import load_opus, setup_logging
@@ -20,14 +21,10 @@ intents.message_content = True
 # Initialize the bot with the correct intents
 bot = commands.Bot(command_prefix='/', intents=intents)
 
-# Add command cogs using asynchronous initialization
-async def setup_cogs():
-    await bot.add_cog(MusicCommands(bot))
-    await bot.add_cog(AdminCommands(bot))  # For potential extension
-
 # Sync slash commands when the bot is ready
 @bot.event
 async def on_ready():
-    await setup_cogs()  # Await the setup of cogs
+    await bot.add_cog(MusicCommands(bot))
+    await bot.add_cog(AdminCommands(bot))  # For potential extension
     await bot.tree.sync()
     print(f"Logged in as {bot.user} and ready!")

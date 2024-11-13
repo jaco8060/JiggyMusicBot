@@ -1,4 +1,5 @@
 # bot/views/video_selection_view.py
+
 import discord
 from discord.ui import Button, View
 import asyncio
@@ -32,32 +33,24 @@ class VideoSelectionView(View):
                 video = self.videos[idx]
                 logger.info(f"Button pressed for video: {video['title']} ({video['url']})")
 
-                # Convert the selected video URL into a playable URL
-                song = await YTDLSource.from_url(video['url'], loop=self.bot.loop, download=False, max_retries=3, retry_delay=5)
-
-                # Ensure the song is a valid YTDLSource object
-                if isinstance(song, str) and song.startswith("Error"):
-                    await interaction.followup.send(f"Error processing the video: {song}")
-                    return
-
                 # Add the selected video to the song queue
-                song_url = song.data.get('url', song.data.get('webpage_url', None))
-                if song_url:
-                    song_queue.append({'url': song_url, 'title': song.title, 'type': 'url'})
-                    logger.info(f"Added {song.title} to the queue. Current queue: {[song['title'] for song in song_queue]}")
+                song_queue.append({
+                    'url': video['url'],
+                    'title': video['title'],
+                    'type': 'url'
+                })
+                logger.info(f"Added {video['title']} to the queue. Current queue: {[song['title'] for song in song_queue]}")
 
-                    # Trigger playback if not currently playing
-                    if not self.voice_client.is_playing():
-                        await play_next_song(self.voice_client)
-                        await interaction.followup.send(
-                            f"Added **{song.title}** to the queue and started playing!"
-                        )
-                    else:
-                        await interaction.followup.send(
-                            f"Added **{song.title}** to the queue. Currently playing another song."
-                        )
+                # Trigger playback if not currently playing
+                if not self.voice_client.is_playing():
+                    await play_next_song(self.voice_client)
+                    await interaction.followup.send(
+                        f"Added **{video['title']}** to the queue and started playing!"
+                    )
                 else:
-                    await interaction.followup.send(f"Error: Could not retrieve a playable URL for the video.")
+                    await interaction.followup.send(
+                        f"Added **{video['title']}** to the queue. Currently playing another song."
+                    )
             except Exception as e:
                 logger.error(f"Error in button callback: {e}")
                 await interaction.followup.send(f"An error occurred: {str(e)}")
