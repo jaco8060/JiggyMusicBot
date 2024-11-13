@@ -1,2 +1,4 @@
 # bot/views/__init__.py
-# This file can be left empty or used for initialization code if necessary.
+
+from .video_selection_view import VideoSelectionView
+from .pagination_view import QueuePaginationView

@@ -2,7 +2,7 @@
 
 import discord
 from discord.ext import commands
-from bot.utils.config import load_opus, setup_logging
+from bot.utils.config import load_opus, setup_logging, ensure_audio_folder  # Import ensure_audio_folder
 from bot.commands.music_commands import MusicCommands
 from bot.commands.admin_commands import AdminCommands  # If you have admin commands
 
@@ -11,6 +11,9 @@ logger = setup_logging()
 
 # Load Opus before initializing the bot
 load_opus()
+
+# Ensure the audio_files directory exists
+ensure_audio_folder()  # Call this function to create the directory if it doesn't exist
 
 # Enable necessary intents to match the Developer Portal settings
 intents = discord.Intents.default()

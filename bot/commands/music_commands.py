@@ -1,5 +1,5 @@
 # bot/commands/music_commands.py
-import os 
+import os
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -10,6 +10,7 @@ from bot.utils.audio import (
     files_to_delete,
 )
 from bot.views.video_selection_view import VideoSelectionView
+from bot.views.pagination_view import QueuePaginationView  # Import the new view
 import asyncio
 import logging
 logger = logging.getLogger(__name__)
@@ -246,12 +247,9 @@ class MusicCommands(commands.Cog):
                 "The queue is currently empty.", ephemeral=True
             )
         else:
-            queue_list = "\n".join(
-                [f"{idx + 1}. {song['title']}" for idx, song in enumerate(song_queue)]
-            )
             logger.info(
-                f"Queue command issued by {interaction.user}. Current queue:\n{queue_list}"
+                f"Queue command issued by {interaction.user}."
             )
-            await interaction.response.send_message(
-                f"Current song queue:\n\n{queue_list}"
-            )
+            view = QueuePaginationView(song_queue.copy(), interaction)
+            await interaction.response.defer()
+            await view.send_initial_message()
