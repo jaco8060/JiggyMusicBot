@@ -33,6 +33,11 @@ class MusicCommands(commands.Cog):
         if not voice_client or not voice_client.is_connected():
             voice_client = await interaction.user.voice.channel.connect()
 
+        # Cancel the disconnect timer if it's running
+        if audio.disconnect_timer and not audio.disconnect_timer.cancelled():
+            audio.disconnect_timer.cancel()
+            audio.disconnect_timer = None
+
         # List to keep track of songs added during this command
         songs_added_to_queue = []
 
@@ -119,6 +124,7 @@ class MusicCommands(commands.Cog):
 
         if not voice_client.is_playing():
             await audio.play_next_song(voice_client)
+ 
     @app_commands.command(name="upload_play", description="Play an uploaded audio file")
     async def upload_play(self, interaction: discord.Interaction):
         if not interaction.user.voice:
@@ -157,6 +163,11 @@ class MusicCommands(commands.Cog):
 
             # Delete the Discord message that contained the uploaded file
             await message.delete()
+
+            # Cancel the disconnect timer if it's running
+            if audio.disconnect_timer and not audio.disconnect_timer.cancelled():
+                audio.disconnect_timer.cancel()
+                audio.disconnect_timer = None
 
             # Add the audio file to the queue with the correct format
             song = {

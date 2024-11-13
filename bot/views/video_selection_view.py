@@ -5,8 +5,8 @@ from discord.ui import Button, View
 import asyncio
 import logging
 from bot.utils.youtube import YTDLSource
-from bot.utils.audio import song_queue, play_next_song, repeat_mode, original_queue  # Import repeat_mode and original_queue
-
+from bot.utils.audio import song_queue, play_next_song, repeat_mode, original_queue  # Remove direct import of disconnect_timer
+from bot.utils import audio  # Import the audio module
 logger = logging.getLogger(__name__)
 
 class VideoSelectionView(View):
@@ -33,6 +33,11 @@ class VideoSelectionView(View):
                 video = self.videos[idx]
                 logger.info(f"Button pressed for video: {video['title']} ({video['url']})")
 
+                # Cancel the disconnect timer if it's running
+                if audio.disconnect_timer and not audio.disconnect_timer.cancelled():
+                    audio.disconnect_timer.cancel()
+                    audio.disconnect_timer = None
+
                 # Add the selected video to the song queue
                 song = {
                     'url': video['url'],
@@ -43,6 +48,10 @@ class VideoSelectionView(View):
 
                 # Update original_queue if repeat_mode is on
                 if repeat_mode:
+                    if not original_queue:
+                        # Include the currently playing song if any
+                        if audio.current_song is not None:
+                            original_queue.append(audio.current_song)
                     original_queue.append(song)
 
                 logger.info(f"Added {video['title']} to the queue. Current queue: {[song['title'] for song in song_queue]}")

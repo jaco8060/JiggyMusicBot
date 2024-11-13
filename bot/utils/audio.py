@@ -12,6 +12,7 @@ song_queue = []
 current_song = None
 repeat_mode = False
 original_queue = []
+disconnect_timer = None  # Variable to hold the disconnect timer task
 
 # Detect ffmpeg path depending on the environment
 if os.name == 'nt':  # Windows
@@ -47,8 +48,13 @@ async def fetch_playback_url(song):
 
 # Function to play the next song in the queue
 async def play_next_song(voice_client):
-    global current_song
+    global current_song, disconnect_timer
     if song_queue:
+        # Cancel any existing disconnect timer since we're about to play a song
+        if disconnect_timer and not disconnect_timer.cancelled():
+            disconnect_timer.cancel()
+            disconnect_timer = None
+
         next_song = song_queue.pop(0)
         current_song = next_song  # Set the current song
 
@@ -81,7 +87,7 @@ async def play_next_song(voice_client):
             if e:
                 logger.error(f"Error occurred during playback: {e}")
 
-            # Set up to play the next song or repeat if needed
+            # Set up to play the next song or wait for new songs
             coro = play_next_song(voice_client)
             fut = asyncio.run_coroutine_threadsafe(coro, voice_client.loop)
             try:
@@ -99,9 +105,25 @@ async def play_next_song(voice_client):
             await play_next_song(voice_client)
         else:
             current_song = None  # No song is playing
+            logger.info("Queue is empty. Cleaning up audio files and waiting for 5 minutes before disconnecting.")
+
+            # Clean up audio files
+            await cleanup_audio_files()
+
+            # Start a disconnect timer
+            disconnect_timer = asyncio.create_task(wait_and_disconnect(voice_client))
+
+async def wait_and_disconnect(voice_client):
+    global disconnect_timer
+    try:
+        await asyncio.sleep(300)  # Wait for 5 minutes
+        if not voice_client.is_playing() and not song_queue:
             await voice_client.disconnect()
-            song_queue.clear()
-            logger.info("Queue is empty. Disconnected from voice channel.")
+            logger.info("No songs played for 5 minutes. Disconnected from voice channel.")
+    except asyncio.CancelledError:
+        logger.info("Disconnect timer cancelled. A new song was added or playback resumed.")
+    finally:
+        disconnect_timer = None
 
 # Cleanup audio files
 async def cleanup_audio_files():
@@ -118,10 +140,19 @@ async def cleanup_audio_files():
 
 # Custom stop function to clear queue and remove files
 async def stop_playback(voice_client):
-    # Clear the queue, set current song to None, and disconnect the bot
+    global song_queue, current_song, disconnect_timer
+    # Clear the queue and set current song to None
     song_queue.clear()
-    global current_song
     current_song = None
+
+    # Cancel the disconnect timer if it's running
+    if disconnect_timer and not disconnect_timer.cancelled():
+        disconnect_timer.cancel()
+        disconnect_timer = None
+
+    # Stop playback and disconnect the bot
+    if voice_client.is_playing():
+        voice_client.stop()
     await voice_client.disconnect()
 
     # Delete all audio files when playback stops
