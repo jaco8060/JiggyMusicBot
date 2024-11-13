@@ -5,10 +5,11 @@ from discord.ui import View, Button
 import math
 
 class QueuePaginationView(View):
-    def __init__(self, queue, interaction, per_page=10):
+    def __init__(self, queue, interaction, current_song=None, per_page=10):
         super().__init__(timeout=120)
         self.queue = queue
         self.interaction = interaction
+        self.current_song = current_song  # Add current_song
         self.per_page = per_page
         self.current_page = 0
         self.total_pages = math.ceil(len(self.queue) / self.per_page)
@@ -41,13 +42,22 @@ class QueuePaginationView(View):
         self.message = await self.interaction.followup.send(content, view=self)
 
     def get_page_content(self):
+        content = ""
+        if self.current_song:
+            content += f"**Currently playing:** {self.current_song['title']}\n\n"
+        else:
+            content += "**No song is currently playing.**\n\n"
+
         start_idx = self.current_page * self.per_page
         end_idx = start_idx + self.per_page
         page_queue = self.queue[start_idx:end_idx]
         queue_list = "\n".join(
             [f"{idx + 1}. {song['title']}" for idx, song in enumerate(page_queue, start=start_idx)]
         )
-        content = f"Current song queue (Page {self.current_page + 1}/{self.total_pages}):\n\n{queue_list}"
+        if queue_list:
+            content += f"Upcoming songs (Page {self.current_page + 1}/{self.total_pages}):\n\n{queue_list}"
+        else:
+            content += "No songs in the queue."
         return content
 
     async def update_message(self):
