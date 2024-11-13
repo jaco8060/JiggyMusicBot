@@ -7,7 +7,6 @@ from bot.utils.youtube import YTDLSource, search_youtube
 from bot.utils.audio import (
     play_next_song,
     song_queue,
-    files_to_delete,
 )
 from bot.views.video_selection_view import VideoSelectionView
 from bot.views.pagination_view import QueuePaginationView  # Import the new view
@@ -189,23 +188,26 @@ class MusicCommands(commands.Cog):
         # Stop the current song, which will trigger the after function to play the next song
         voice_client.stop()
 
-        # If there are files to delete, delete the first one
-        if files_to_delete:
-            file_to_delete = files_to_delete.pop(0)
-            try:
-                os.remove(file_to_delete)
-                logger.info(f"Deleted file: {file_to_delete}")
-            except FileNotFoundError:
-                logger.warning(f"File not found, could not delete: {file_to_delete}")
-            except Exception as e:
-                logger.error(f"Error deleting file {file_to_delete}: {e}")
+        # Delete the currently playing file if it's a local file
+        current_source = voice_client.source
+        if isinstance(current_source, discord.PCMVolumeTransformer):
+            original_source = current_source.original
+            if isinstance(original_source, discord.FFmpegPCMAudio):
+                source_path = original_source.source
+                if os.path.exists(source_path) and source_path.startswith("audio_files"):
+                    try:
+                        os.remove(source_path)
+                        logger.info(f"Deleted file: {source_path}")
+                    except Exception as e:
+                        logger.error(f"Error deleting file {source_path}: {e}")
 
         await interaction.response.send_message(
             "Skipped the current song. Playing the next song in the queue."
         )
-
+        
     @app_commands.command(name="stop", description="Stop the audio and disconnect the bot")
     async def stop(self, interaction: discord.Interaction):
+        
         voice_client = interaction.guild.voice_client
 
         if voice_client and voice_client.is_connected():
@@ -220,9 +222,19 @@ class MusicCommands(commands.Cog):
             voice_client.stop()
             await voice_client.disconnect()
 
-            # Clear the song queue and file deletion list
+            # Clear the song queue
             song_queue.clear()
-            files_to_delete.clear()
+
+            # Delete all files in audio_files directory
+            audio_folder = "audio_files"
+            for filename in os.listdir(audio_folder):
+                file_path = os.path.join(audio_folder, filename)
+                try:
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                        logger.info(f"Deleted file: {file_path}")
+                except Exception as e:
+                    logger.error(f"Error deleting file {file_path}: {e}")
 
             # Trigger garbage collection
             import gc

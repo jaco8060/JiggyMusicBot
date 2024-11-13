@@ -9,7 +9,6 @@ from bot.utils.youtube import YTDLSource, search_youtube
 logger = logging.getLogger(__name__)
 
 song_queue = []
-files_to_delete = []
 
 # Detect ffmpeg path depending on the environment
 if os.name == 'nt':  # Windows
@@ -83,6 +82,7 @@ async def play_next_song(voice_client):
             if next_song['type'] == 'file':
                 try:
                     os.remove(next_song['path'])
+                    logger.info(f"Deleted file after playback: {next_song['path']}")
                 except Exception as err:
                     logger.error(f"Error deleting file: {err}")
             # Proceed to play the next song
@@ -95,6 +95,20 @@ async def play_next_song(voice_client):
 
         voice_client.play(player, after=after_playing)
     else:
+        # Disconnect from the voice channel
         await voice_client.disconnect()
         song_queue.clear()
         logger.info("Queue is empty. Disconnected from voice channel.")
+
+        # Delete all files in audio_files directory
+        audio_folder = "audio_files"
+        for filename in os.listdir(audio_folder):
+            file_path = os.path.join(audio_folder, filename)
+            try:
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+                    logger.info(f"Deleted file: {file_path}")
+            except Exception as e:
+                logger.error(f"Error deleting file {file_path}: {e}")
+
+        logger.info("Cleaned up audio_files directory.")
