@@ -186,6 +186,9 @@ Run the script to build and start the bot:
 - `/queue`
   - **Description**: View the current queue of songs.
 
+- `/repeat <Choose 'on' or 'off'>`
+  - **Description**: Toggles repeat mode on or off which repeats the current queue.
+
 # Dependencies
 
 This bot uses the following dependencies to work correctly:
