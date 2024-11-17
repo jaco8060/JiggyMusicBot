@@ -1,27 +1,20 @@
 {
   "name": "jiggymusicbot",
   "version": "1.0.0",
-  "description": "This bot allows you to play music, upload audio files, and manage music queues in a Discord server. It supports YouTube links and direct audio file uploads.",
+  "description": "This bot allows you to play music, upload audio files, and manage music queues in a Discord server.",
   "main": "index.js",
   "scripts": {
     "start": "ts-node src/index.ts",
     "build": "tsc",
     "lint": "eslint src/**/*.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "@discordjs/builders": "^1.9.0",
-    "@discordjs/rest": "^2.4.0",
-    "@discordjs/voice": "^0.17.0",
-    "@picovoice/leopard-node": "^2.0.4",
-    "@picovoice/porcupine-node": "^3.0.4",
     "discord.js": "^14.16.2",
     "dotenv": "^16.4.5",
-    "dotenv-expand": "^11.0.6",
-    "googleapis": "^144.0.0",
-    "youtube-dl-exec": "^3.0.9"
+    "youtube-dl-exec": "^3.0.9",
+    "@discordjs/voice": "^0.17.0",
+    "ytdl-core-discord": "^1.2.0",
+    "googleapis": "^144.0.0"
   },
   "devDependencies": {
     "@types/node": "^18.16.19",

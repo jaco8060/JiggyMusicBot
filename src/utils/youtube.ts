@@ -1,56 +1,38 @@
+// src/utils/youtube.ts
+
 import { google } from "googleapis";
 import { Readable } from "stream";
-import youtubedl from "youtube-dl-exec";
-import { config } from "../config";
-import { Track } from "../utils/audioPlayer";
+import ytdl from "ytdl-core";
 
-const youtube = google.youtube({
-  version: "v3",
-  auth: config.youtubeApiKey,
-});
+const youtube = google.youtube("v3");
 
-export interface Video {
-  title: string;
-  url: string;
-}
+export async function searchYouTube(
+  query: string
+): Promise<Array<{ url: string; title: string }>> {
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  if (!apiKey) {
+    throw new Error("YOUTUBE_API_KEY is not set.");
+  }
 
-export async function youtubeSearch(query: string): Promise<Video[]> {
-  const response = await youtube.search.list({
+  const res = await youtube.search.list({
     part: ["snippet"],
     q: query,
-    type: ["video"],
     maxResults: 5,
+    key: apiKey,
   });
 
-  const videos =
-    response.data.items?.map((item) => ({
-      title: item.snippet?.title || "No Title",
+  return (
+    res.data.items?.map((item) => ({
       url: `https://www.youtube.com/watch?v=${item.id?.videoId}`,
-    })) || [];
-
-  return videos;
+      title: item.snippet?.title || "Unknown Title",
+    })) || []
+  );
 }
 
-export async function getYTInfo(url: string): Promise<Track> {
-  const info: any = await youtubedl(url, {
-    dumpSingleJson: true,
-    noWarnings: true,
-    preferFreeFormats: true,
-    youtubeSkipDashManifest: true,
-  });
-
-  const subprocess = youtubedl.exec(url, {
-    output: "-",
-    format: "bestaudio",
-    audioFormat: "opus",
-  });
-
-  const stream = subprocess.stdout as Readable;
-
-  return {
-    title: info.title,
-    url: url,
-    duration: info.duration,
-    stream,
-  };
+export async function getYouTubeStream(
+  url: string
+): Promise<{ stream: Readable; title: string; type: any }> {
+  const info = await ytdl.getInfo(url);
+  const stream = ytdl.downloadFromInfo(info, { filter: "audioonly" });
+  return { stream, title: info.videoDetails.title, type: undefined };
 }
