@@ -152,7 +152,7 @@ docker stop jiggyBotContainer1
 docker rm jiggyBotContainer1
 
 # Run a new container with the built image
-docker run -d --name jiggyBotContainer1 --cpus="4.0" --env-file .env --restart unless-stopped jiggybot1
+docker run -d --name jiggyBotContainer1 --env-file .env --restart unless-stopped jiggybot1
 ```
 
 Make the script executable:
