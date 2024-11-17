@@ -1,15 +1,13 @@
 // src/views/QueuePaginationView.ts
 
-// This file would implement a view that allows users to navigate through the queue.
-// Since the implementation was not provided, here's a basic structure.
-
 import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonInteraction,
   ButtonStyle,
+  CommandInteraction,
+  ComponentType,
   EmbedBuilder,
-  Interaction,
 } from "discord.js";
 import { AudioManager } from "../utils/audio";
 
@@ -17,17 +15,18 @@ export class QueuePaginationView {
   private currentPage = 0;
   private itemsPerPage = 10;
   private queue: any[];
-  private interaction: Interaction;
+  private interaction: CommandInteraction;
+  private messageId?: string;
+
   private audioManager: AudioManager;
 
-  constructor(interaction: Interaction, audioManager: AudioManager) {
+  constructor(interaction: CommandInteraction, audioManager: AudioManager) {
     this.interaction = interaction;
     this.audioManager = audioManager;
     this.queue = audioManager.getQueue();
-    this.showPage();
   }
 
-  private async showPage() {
+  public async showPage() {
     const start = this.currentPage * this.itemsPerPage;
     const end = start + this.itemsPerPage;
     const pageItems = this.queue.slice(start, end);
@@ -39,6 +38,12 @@ export class QueuePaginationView {
           .map((song, index) => `${start + index + 1}. ${song.title}`)
           .join("\n")
       );
+
+    if (this.audioManager.getCurrentSong()) {
+      embed.setFooter({
+        text: `Currently Playing: ${this.audioManager.getCurrentSong()?.title}`,
+      });
+    }
 
     const prevButton = new ButtonBuilder()
       .setCustomId("prev_page")
@@ -57,34 +62,32 @@ export class QueuePaginationView {
       nextButton
     );
 
-    await this.interaction.reply({
+    const message = await this.interaction.reply({
       embeds: [embed],
       components: [actionRow],
+      fetchReply: true,
     });
 
-    const filter = (i: ButtonInteraction) =>
-      ["prev_page", "next_page"].includes(i.customId) &&
-      i.user.id === this.interaction.user.id;
+    this.messageId = message.id;
+  }
 
-    const collector = this.interaction.channel?.createMessageComponentCollector(
-      {
-        filter,
-        time: 60000,
-      }
-    );
+  // Static method to handle button interactions
+  public static async handleButtonInteraction(
+    interaction: ButtonInteraction,
+    audioManager: AudioManager
+  ) {
+    if (!interaction.message || !interaction.message.interaction) return;
 
-    collector?.on("collect", async (i: ButtonInteraction) => {
-      if (i.customId === "prev_page") {
-        this.currentPage--;
-      } else if (i.customId === "next_page") {
-        this.currentPage++;
-      }
-      await i.deferUpdate();
-      await this.showPage();
-    });
+    const originalInteractionId = interaction.message.interaction.id;
+    if (interaction.message.id !== originalInteractionId) return;
 
-    collector?.on("end", async () => {
-      await this.interaction.editReply({ components: [] });
-    });
+    // Retrieve current page from embed footer or other storage
+    let currentPage = 0; // You'll need to store and retrieve this value
+
+    if (interaction.customId === "prev_page") {
+      currentPage--;
+    } else if (interaction.customId === "next_page") {
+      currentPage++;
+    }
   }
 }

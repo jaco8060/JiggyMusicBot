@@ -5,74 +5,41 @@ import {
   ButtonBuilder,
   ButtonInteraction,
   ButtonStyle,
+  ChatInputCommandInteraction,
   ComponentType,
-  InteractionReplyOptions,
-  StringSelectMenuBuilder,
-  StringSelectMenuInteraction,
 } from "discord.js";
 import { AudioManager } from "../utils/audio";
 
 export class VideoSelectionView {
   private videos: Array<{ url: string; title: string }>;
+  private interaction: ChatInputCommandInteraction;
   private audioManager: AudioManager;
+  private selectionId: string;
 
   constructor(
     videos: Array<{ url: string; title: string }>,
-    private interaction: ButtonInteraction | StringSelectMenuInteraction,
-    audioManager: AudioManager
+    interaction: ChatInputCommandInteraction,
+    audioManager: AudioManager,
+    selectionId: string
   ) {
     this.videos = videos;
+    this.interaction = interaction;
     this.audioManager = audioManager;
-    this.showMenu();
+    this.selectionId = selectionId;
   }
 
-  private async showMenu() {
-    const options = this.videos.map((video, index) => ({
-      label: video.title,
-      value: index.toString(),
-    }));
-
-    const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId("video_select")
-      .setPlaceholder("Select a video")
-      .addOptions(options);
-
-    const actionRow =
-      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
-
-    await this.interaction.followUp({
-      content: "Please select a video:",
-      components: [actionRow],
+  public getComponents() {
+    const buttons = this.videos.slice(0, 5).map((video, index) => {
+      return new ButtonBuilder()
+        .setCustomId(`video_select_${this.selectionId}_${index}`)
+        .setLabel(`#${index + 1}`)
+        .setStyle(ButtonStyle.Primary);
     });
 
-    const filter = (i: StringSelectMenuInteraction) =>
-      i.customId === "video_select" && i.user.id === this.interaction.user.id;
-
-    const collector = this.interaction.channel?.createMessageComponentCollector(
-      {
-        filter,
-        componentType: ComponentType.StringSelect,
-        time: 60000,
-      }
+    const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      ...buttons
     );
 
-    collector?.on("collect", async (i: StringSelectMenuInteraction) => {
-      const selectedIndex = parseInt(i.values[0], 10);
-      const selectedVideo = this.videos[selectedIndex];
-
-      const title = await this.audioManager.addToQueue(selectedVideo.url);
-      await i.update({
-        content: `Added **${title}** to the queue.`,
-        components: [],
-      });
-
-      if (!this.audioManager.isPlaying()) {
-        this.audioManager.playNext();
-      }
-    });
-
-    collector?.on("end", async () => {
-      await this.interaction.editReply({ components: [] });
-    });
+    return [actionRow];
   }
 }
