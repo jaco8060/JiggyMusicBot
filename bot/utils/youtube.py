@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 # yt-dlp options
 ytdl_format_options = {
-    'format': 'bestaudio/best',
+    'format': 'bestaudio[abr<=64]/best',  # Limit bitrate to 64kbps
     'outtmpl': 'audio_files/%(extractor)s-%(id)s-%(title)s.%(ext)s',
     'restrictfilenames': True,
     'noplaylist': False,  # Allow playlists
