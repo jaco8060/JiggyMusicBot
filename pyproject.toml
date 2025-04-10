@@ -8,7 +8,7 @@ license = "MIT"
 [tool.poetry.dependencies]
 python = "^3.10"
 discord-py = "^2.4.0" # Use the appropriate version based on your code compatibility
-yt-dlp = "^2025.01.26"
+yt-dlp = "^2025.03.31"
 requests = "^2.32.3"
 python-dotenv = "^1.0.0"
 pynacl = "^1.5.0"
