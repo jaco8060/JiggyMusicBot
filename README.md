@@ -1,9 +1,9 @@
-
 # Jiggy Music Bot
 
 This bot allows you to play music, upload audio files, and manage music queues in a Discord server. It supports YouTube links and direct audio file uploads.
 
 ## Table of Contents
+
 1. [Creating Your Discord Bot](#creating-your-discord-bot)
 2. [Running the Bot on Windows](#running-the-bot-on-windows)
 3. [Raspberry Pi Implementation](#raspberry-pi-implementation)
@@ -41,34 +41,40 @@ This bot allows you to play music, upload audio files, and manage music queues i
 ## Running the Bot on Windows
 
 ### Prerequisites
+
 - [Git](https://git-scm.com/downloads)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop)
 
 ### Steps
 
 1. Clone the repository:
+
    ```
    git clone https://github.com/jaco8060/JiggyMusicBot.git
    cd JiggyMusicBot
    ```
 
 2. Create a `.env` file in the project directory:
+
    ```
    notepad .env
    ```
 
 3. Add your environment variables to the `.env` file:
+
    ```
    DISCORD_BOT_TOKEN=<your-discord-bot-token>
    YOUTUBE_API_KEY=<your-youtube-api-key>
    ```
 
 4. Create a batch file named `start_bot.bat` in the project directory:
+
    ```
    notepad start_bot.bat
    ```
 
 5. Add the following content to the batch file:
+
    ```batch
    @echo off
    docker build -t jiggybot1 .
@@ -99,10 +105,12 @@ This implementation is designed for a Raspberry Pi Zero 2 W using DietPi as the 
 1. After setting up DietPi, SSH into your Raspberry Pi Zero 2 W.
 2. Visit the [DietPi Software Installation Tool guide](https://dietpi.com/docs/dietpi_tools/software_installation/) for detailed instructions on installing software packages.
 3. To install Docker and Git, use the following commands in the DietPi-Software tool:
+
    ```
    Docker
    Git
    ```
+
    This will install Docker, Git, and all their dependencies.
 
 4. After installation, reboot your Raspberry Pi:
@@ -113,12 +121,14 @@ This implementation is designed for a Raspberry Pi Zero 2 W using DietPi as the 
 ### Step 3: Clone the Repository and Set Up the Project
 
 1. Clone the repository:
+
    ```
    git clone https://github.com/jaco8060/JiggyMusicBot.git
    cd JiggyMusicBot
    ```
 
 2. Create a `.env` file in the project directory:
+
    ```
    nano .env
    ```
@@ -170,20 +180,25 @@ Run the script to build and start the bot:
 ## Commands and How to Use Them
 
 - `/play <YouTube URL or Search Query>`
+
   - **Description**: Play a song from YouTube, either by providing a direct URL or searching by a keyword.
   - **Example**: `/play Rick Astley - Never Gonna Give You Up`
 
 - `/upload_play`
+
   - **Description**: Upload an audio file (e.g., `.mp3` or `.wav`) and play it in the voice channel.
   - **Usage**: Run the command `/upload_play` and follow the instructions to upload your file.
 
 - `/skip`
+
   - **Description**: Skips the currently playing song and plays the next one in the queue.
 
 - `/stop`
+
   - **Description**: Stops the music, disconnects the bot from the voice channel, and clears the queue.
 
 - `/queue`
+
   - **Description**: View the current queue of songs.
 
 - `/repeat <Choose 'on' or 'off'>`
@@ -193,18 +208,18 @@ Run the script to build and start the bot:
 
 This bot uses the following dependencies to work correctly:
 
-| Package              | Description                                                                                | Version          |
-|----------------------|--------------------------------------------------------------------------------------------|------------------|
-| discord.py           | A Python wrapper for the Discord API, used for creating bots.                              | 2.4.0            |
-| discord.ext.commands | Extension for discord.py to create bot commands.                                           | 2.4.0            |
-| yt_dlp               | A command-line program to download videos from YouTube and other video sites.              | 2024.8.6         |
-| requests             | A simple, yet elegant HTTP library for Python.                                             | 2.32.3           |
-| dotenv               | Reads key-value pairs from a .env file and adds them to environment variables.             | 1.0.0            |
-| pynacl               | Python bindings to the Networking and Cryptography library.                                | 1.5.0            |
-| ffmpeg               | A complete, cross-platform solution to record, convert and stream audio and video.         | 4.4.1            |
-| opus                 | A codec used for interactive speech and audio transmission over the internet.              | 1.3.1            |
-| poetry               | A tool for dependency management and packaging in Python.                                  | 1.1.13           |
-| python               | The base Python language and runtime environment.                                          | 3.10             |
+| Package              | Description                                                                        | Version  |
+| -------------------- | ---------------------------------------------------------------------------------- | -------- |
+| discord.py           | A Python wrapper for the Discord API, used for creating bots.                      | 2.4.0    |
+| discord.ext.commands | Extension for discord.py to create bot commands.                                   | 2.4.0    |
+| yt_dlp               | A command-line program to download videos from YouTube and other video sites.      | 2024.8.6 |
+| requests             | A simple, yet elegant HTTP library for Python.                                     | 2.32.3   |
+| dotenv               | Reads key-value pairs from a .env file and adds them to environment variables.     | 1.0.0    |
+| pynacl               | Python bindings to the Networking and Cryptography library.                        | 1.5.0    |
+| ffmpeg               | A complete, cross-platform solution to record, convert and stream audio and video. | 4.4.1    |
+| opus                 | A codec used for interactive speech and audio transmission over the internet.      | 1.3.1    |
+| poetry               | A tool for dependency management and packaging in Python.                          | 1.1.13   |
+| python               | The base Python language and runtime environment.                                  | 3.10     |
 
 ## Terms of Service and Privacy Policy
 
@@ -212,4 +227,5 @@ This bot uses the following dependencies to work correctly:
 - Please review our [Privacy Policy](PRIVACY.md) to understand how we collect and use your data.
 
 ---
+
 Enjoy using Jiggy Music Bot for all your Discord music needs!
